@@ -1,2 +1,2 @@
-STREAMS ONLINE 1.0 FINAL GRID
-학생 화면을 CSS Grid로 재구성한 정식 배포판입니다.
+STREAMS ONLINE 1.0 FINAL FIXED LAYOUT
+학생 화면 좌표 고정 수정판입니다.
