@@ -1,8 +1,6 @@
 let room=localStorage.getItem("streamsTeacherRoom")||"";
 let roomData=null;
-let unsubscribe=null;
 let pollTimer=null;
-let lastDoneMap={};
 
 async function newRoom(){
   room=makeCode();
@@ -17,7 +15,7 @@ async function newRoom(){
     ended:false,
     dataVersion:"3.2-name-based"
   });
-  listenRoom();
+  await refreshRoom();
 }
 
 async function resetRoom(){
@@ -49,7 +47,6 @@ async function resetRoom(){
     ended:false,
     dataVersion:"3.2-name-based"
   });
-  lastDoneMap={};
   await refreshRoom();
 }
 
@@ -70,8 +67,8 @@ function studentsObj(){return roomData?.students||{};}
 function getStudentKeys(){return Object.keys(studentsObj());}
 function currentTurn(){return roomData?.currentIndex??-1;}
 
-function isDone(k){
-  const s=studentsObj()[k];
+function isDone(key){
+  const s=studentsObj()[key];
   return currentTurn()>=0 && s && s.currentPlaced===currentTurn();
 }
 
@@ -113,19 +110,13 @@ function renderStudents(){
   $("studentList").innerHTML=keys.length?keys.map(k=>{
     const s=students[k]||{};
     const done=isDone(k);
-    const wasDone=lastDoneMap[k]===true;
-    const flash=done&&!wasDone?' flash':'';
     const sc=scoreBoard(s.boardSimple||[]);
     const online=(Date.now()-(s.lastSeen||0)<8000);
-    return `<div class="student-card ${done?'done':'pending'}${flash}" data-id="${k}">
+    return `<div class="student-card ${done?'done':'pending'}" data-id="${k}">
       <div>${done?'🟢':'⚪'} ${s.name||k} ${online?'':'<span class="small">(오프라인)</span>'}</div>
       <div class="small">${done?'입력 완료':'미입력'} · ${sc.run}칸 / ${sc.score}점</div>
     </div>`;
   }).join(""):"아직 학생 없음";
-
-  const nextMap={};
-  keys.forEach(k=>{nextMap[k]=isDone(k);});
-  lastDoneMap=nextMap;
 
   document.querySelectorAll(".student-card").forEach(el=>el.onclick=()=>openStudent(el.dataset.id));
 }
@@ -179,21 +170,11 @@ async function refreshRoom(){
   render();
 }
 
-function listenRoom(){
-  if(unsubscribe)unsubscribe();
-  clearInterval(pollTimer);
+function start(){
   staticRender();
-
   if(!room)return newRoom();
-
-  unsubscribe=fbListen("/streamsRooms/"+room,data=>{
-    if(data){
-      roomData=data;
-      render();
-    }
-  });
-
   refreshRoom();
+  clearInterval(pollTimer);
   pollTimer=setInterval(refreshRoom,500);
 }
 
@@ -227,4 +208,4 @@ $("endBtn").onclick=async()=>{
 $("closeModal").onclick=()=>$("modal").classList.add("hidden");
 $("modal").onclick=e=>{if(e.target.id==="modal")$("modal").classList.add("hidden")};
 
-listenRoom();
+start();

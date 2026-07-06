@@ -3,18 +3,14 @@ let name=localStorage.getItem("streamsName")||"";
 let key="";
 let roomData=null;
 let board=Array(20).fill(null);
+let currentPlaced=-999;
 let resetToken="";
 let unsubscribe=null;
 let heartbeatTimer=null;
-const ACTIVE_LIMIT_MS=8000;
 
 $("roomInput").value=room;
 $("nameInput").value=name;
 $("joinBtn").onclick=join;
-
-function isActive(s){
-  return Date.now()-(s?.lastSeen||0)<ACTIVE_LIMIT_MS;
-}
 
 async function join(){
   room=$("roomInput").value.trim().toUpperCase();
@@ -26,53 +22,78 @@ async function join(){
   }
 
   key=nameKey(name);
+
   const data=await fbGet("/streamsRooms/"+room);
   if(!data){
     $("joinMsg").textContent="방을 찾을 수 없습니다.";
     return;
   }
 
-  const existing=(data.students||{})[key];
-
-  // 같은 이름이 접속 중이면 새 접속 차단.
-  // 단, 같은 브라우저가 새로고침/재접속하는 경우는 lastSeen만으로 구분이 어려우므로
-  // 학생이 나갔다가 다시 들어오는 상황을 위해 기존 기록이 있으면 이어서 하기를 우선 허용합니다.
-  // 다른 학생이 같은 이름으로 동시에 들어오면 교사용 목록에서 하나의 이름으로 합쳐지므로 이름 중복 방지 효과가 있습니다.
-  if(existing && isActive(existing) && !confirm("같은 이름의 기록이 이미 있습니다.\n본인이라면 확인을 눌러 이어서 진행하세요.\n다른 학생이라면 취소 후 다른 이름을 적어주세요.")){
-    $("joinMsg").textContent="다른 이름을 적어주세요.";
-    return;
-  }
-
-  localStorage.setItem("streamsName",name);
   roomData=data;
   resetToken=String(data.resetToken||"");
 
-  if(existing&&existing.board){
-    board=existing.board;
+  const existing=(data.students||{})[key];
+
+  if(existing){
+    // 핵심: 같은 이름 기록이 있으면 기존 board/currentPlaced를 절대 초기화하지 않음
+    board=existing.board||Array(20).fill(null);
+    currentPlaced=typeof existing.currentPlaced==="number" ? existing.currentPlaced : -999;
+    await fbPatch("/streamsRooms/"+room+"/students/"+key,{
+      name,
+      lastSeen:Date.now(),
+      updated:existing.updated||Date.now(),
+      online:true
+    });
   }else{
     board=Array(20).fill(null);
+    currentPlaced=-999;
+    await fbPatch("/streamsRooms/"+room+"/students/"+key,{
+      name,
+      board,
+      boardSimple:simpleBoard(board),
+      currentPlaced:-999,
+      joined:Date.now(),
+      updated:Date.now(),
+      lastSeen:Date.now(),
+      online:true
+    });
   }
 
-  await saveStudent(currentCell()!==null?roomData.currentIndex:-999);
+  localStorage.setItem("streamsName",name);
+  localStorage.setItem("streamsRoom",room);
 
   $("joinScreen").classList.add("hidden");
   $("gameScreen").classList.remove("hidden");
   history.replaceState(null,"","student.html?room="+room);
+
   listenRoom();
   startHeartbeat();
+  render();
 }
 
 function listenRoom(){
   if(unsubscribe)unsubscribe();
+
   unsubscribe=fbListen("/streamsRooms/"+room,async data=>{
     if(!data)return;
+
     const newToken=String(data.resetToken||"");
 
-    if(resetToken&&newToken!==resetToken){
+    // 교사가 초기화한 경우에만 학생 보드 삭제
+    if(resetToken && newToken!==resetToken){
       board=Array(20).fill(null);
+      currentPlaced=-999;
       roomData=data;
       resetToken=newToken;
-      await saveStudent(-999);
+      await fbPatch("/streamsRooms/"+room+"/students/"+key,{
+        name,
+        board,
+        boardSimple:simpleBoard(board),
+        currentPlaced:-999,
+        updated:Date.now(),
+        lastSeen:Date.now(),
+        online:true
+      });
       render();
       return;
     }
@@ -80,10 +101,12 @@ function listenRoom(){
     resetToken=newToken;
     roomData=data;
 
-    // 서버에 내 기록이 있고, 내 로컬 보드보다 최신인 경우만 동기화
+    // 서버에 저장된 내 보드가 있으면, 내 로컬과 병합하지 말고 서버 최신 상태를 그대로 사용
+    // 재입장/새로고침 시 기존 진행상황 복구를 확실히 하기 위한 처리
     const serverMe=data.students?.[key];
-    if(serverMe&&serverMe.board&&serverMe.updated && serverMe.updated>(Number(localStorage.getItem("streamsLastLocalUpdate_"+room+"_"+key)||0)+1000)){
+    if(serverMe&&serverMe.board){
       board=serverMe.board;
+      currentPlaced=typeof serverMe.currentPlaced==="number" ? serverMe.currentPlaced : currentPlaced;
     }
 
     render();
@@ -94,7 +117,10 @@ function startHeartbeat(){
   clearInterval(heartbeatTimer);
   heartbeatTimer=setInterval(()=>{
     if(room&&key){
-      fbPatch("/streamsRooms/"+room+"/students/"+key,{lastSeen:Date.now(),name});
+      fbPatch("/streamsRooms/"+room+"/students/"+key,{
+        lastSeen:Date.now(),
+        online:true
+      });
     }
   },2000);
 }
@@ -135,22 +161,22 @@ async function place(cell){
 
   board=board.map(x=>x&&x.drawIndex===idx?null:x);
   board[cell]={drawIndex:idx,value:val};
+  currentPlaced=idx;
 
   render();
-  await saveStudent(idx);
+  await saveStudent();
 }
 
-async function saveStudent(currentPlaced){
+async function saveStudent(){
   const updated=Date.now();
-  localStorage.setItem("streamsLastLocalUpdate_"+room+"_"+key,String(updated));
   await fbPatch("/streamsRooms/"+room+"/students/"+key,{
     name,
     board,
     boardSimple:simpleBoard(board),
     currentPlaced,
     updated,
-    joined:updated,
-    lastSeen:updated
+    lastSeen:updated,
+    online:true
   });
 }
 
@@ -161,7 +187,7 @@ window.addEventListener("beforeunload",()=>{
         method:"PATCH",
         keepalive:true,
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({lastSeen:0})
+        body:JSON.stringify({lastSeen:0,online:false})
       });
     }catch(e){}
   }

@@ -1,7 +1,6 @@
 const room=qs("room");
 let displayData=null;
 let displayTimer=null;
-
 $("displayRoom").textContent=room||"-";
 
 async function loadDisplay(){
@@ -23,15 +22,13 @@ function rankedStudents(){
       board:s.boardSimple||Array(20).fill(null),
       currentPlaced:s.currentPlaced,
       score:sc.score,
-      run:sc.run,
-      updated:s.updated||0
+      run:sc.run
     };
   }).sort((a,b)=>b.score-a.score||b.run-a.run||a.name.localeCompare(b.name,"ko"));
 }
 
 function renderDisplay(){
   if(!displayData)return;
-
   const current=displayData.currentIndex??-1;
   const picked=Math.max(0,current+1);
   const students=displayData.students||{};
@@ -50,9 +47,7 @@ function renderDisplay(){
     </div>`;
   }).join(""):"<div class='display-sub'>아직 학생 없음</div>";
 
-  document.querySelectorAll(".display-rank-row").forEach(el=>{
-    el.onclick=()=>openDisplayBoard(el.dataset.id);
-  });
+  document.querySelectorAll(".display-rank-row").forEach(el=>el.onclick=()=>openDisplayBoard(el.dataset.id));
 }
 
 function openDisplayBoard(id){
@@ -67,12 +62,7 @@ function openDisplayBoard(id){
     <div class="board-only-sub">오름차순 ${sc.run}칸 / ${sc.score}점</div>
     <div id="singleBoard"></div>
   </div>`;
-  renderBoardOnly($("singleBoard"),{
-    board:s.boardSimple||Array(20).fill(null),
-    name:s.name||"",
-    room,
-    currentValue:displayData.currentValue||"-"
-  });
+  renderBoardOnly($("singleBoard"),{board:s.boardSimple||Array(20).fill(null),name:s.name||"",room,currentValue:displayData.currentValue||"-"});
 }
 
 function openTop3(){
@@ -85,12 +75,7 @@ function openTop3(){
     <h3>${i===0?'🥇':i===1?'🥈':'🥉'} ${s.name}<br>오름차순 ${s.run}칸 / ${s.score}점</h3>
     <div id="topBoard${i}"></div>
   </div>`).join("")}</div>`;
-  top.forEach((s,i)=>renderBoardOnly($("topBoard"+i),{
-    board:s.board,
-    name:s.name,
-    room,
-    currentValue:displayData.currentValue||"-"
-  }));
+  top.forEach((s,i)=>renderBoardOnly($("topBoard"+i),{board:s.board,name:s.name,room,currentValue:displayData.currentValue||"-"}));
 }
 
 function closeDisplayModal(){
@@ -103,7 +88,6 @@ $("displayModal").onclick=e=>{if(e.target.id==="displayModal")closeDisplayModal(
 $("top3Btn").onclick=openTop3;
 
 if(room){
-  // SSE가 먹통이어도 순위가 반드시 바뀌도록 0.7초마다 직접 읽습니다.
   loadDisplay();
   clearInterval(displayTimer);
   displayTimer=setInterval(loadDisplay,700);
