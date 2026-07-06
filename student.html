@@ -68,14 +68,21 @@ function renderBoard(container,opt={}){
 }
 </script>
 <script>
-let room=roomParam,sid=localStorage.getItem('streamsSid')||('s'+Math.random().toString(36).slice(2));localStorage.setItem('streamsSid',sid);
-let name=localStorage.getItem('streamsName')||'',state=null,board=Array(20).fill(null),joined=!!(room&&name);
+let room=roomParam;
+let sid=localStorage.getItem('streamsSid')||('s'+Math.random().toString(36).slice(2));
+localStorage.setItem('streamsSid',sid);
 
-let lastIndex=null;
+let name=localStorage.getItem('streamsName')||'';
+let state=null;
+let board=Array(20).fill(null);
+let joined=!!(room&&name);
+let pollTimer=null;
 let saveTimer=null;
-let saving=false;
+let isRendering=false;
 
 function nameScreen(msg=''){
+  clearInterval(pollTimer);
+  joined=false;
   app.innerHTML=`<div class="name-screen"><div class="name-box"><h1>스트림스 입장</h1>${msg?`<p style="color:#c00;font-weight:900">${msg}</p>`:''}<input id="roomInput" placeholder="방코드" value="${room||''}"><input id="nameInput" placeholder="이름" value="${name||''}" autofocus><button class="btn green" id="joinBtn">입장하기</button></div></div>`;
   joinBtn.onclick=join;
 }
@@ -89,53 +96,74 @@ async function join(){
   if(!r){nameScreen('방을 찾을 수 없습니다. 교사용 화면의 방코드를 확인하세요.');return;}
 
   localStorage.setItem('streamsName',name);
+
   const old=await get('/streamsRooms/'+room+'/students/'+sid);
-  board=(old&&old.board)||Array(20).fill(null);
+  if(old&&old.board) board=old.board;
 
   await patch('/streamsRooms/'+room+'/students/'+sid,{
-    name, board, boardSimple:simpleBoard(),
-    currentPlaced:currentDrawObjWithState(r)?r.currentIndex:-999,
+    name,
+    board,
+    boardSimple:simpleBoard(),
+    currentPlaced:-999,
     joined:Date.now()
   });
 
   joined=true;
   history.replaceState(null,'','student.html?room='+room);
-  await init();
+  state=r;
+  render();
+  startPolling();
 }
 
 async function init(){
   if(!room||!name){nameScreen();return;}
 
-  state=await get('/streamsRooms/'+room);
-  if(!state){nameScreen('방을 찾을 수 없습니다.');joined=false;return;}
+  const r=await get('/streamsRooms/'+room);
+  if(!r){nameScreen('방을 찾을 수 없습니다.');return;}
 
-  const me=await get('/streamsRooms/'+room+'/students/'+sid);
-  if(me&&me.board) board=me.board;
-  else await patch('/streamsRooms/'+room+'/students/'+sid,{name,board,boardSimple:simpleBoard(),currentPlaced:-999,joined:Date.now()});
+  state=r;
 
-  lastIndex=state.currentIndex;
+  const old=await get('/streamsRooms/'+room+'/students/'+sid);
+  if(old&&old.board){
+    board=old.board;
+  }else{
+    await patch('/streamsRooms/'+room+'/students/'+sid,{
+      name,
+      board,
+      boardSimple:simpleBoard(),
+      currentPlaced:-999,
+      joined:Date.now()
+    });
+  }
+
+  joined=true;
   render();
+  startPolling();
+}
+
+function startPolling(){
+  clearInterval(pollTimer);
+  pollTimer=setInterval(pollRoom,800);
 }
 
 async function pollRoom(){
   if(!joined||!room)return;
+  const r=await get('/streamsRooms/'+room);
+  if(!r)return;
 
-  const newState=await get('/streamsRooms/'+room);
-  if(!newState)return;
-
-  const changed = state && newState.currentIndex !== state.currentIndex;
-  state=newState;
-
-  // 핵심: 다음 숫자가 바뀌어도 board는 서버에서 다시 읽어 덮어쓰지 않음.
-  // 학생이 가진 board를 그대로 두고 현재 숫자만 바꿔서 즉시 렌더링.
-  if(changed || newState.currentValue !== (state&&state.currentValue)){
-    lastIndex=newState.currentIndex;
-  }
-  render();
+  // 항상 최신 현재 숫자/회차를 반영
+  const changed = !state || r.currentIndex!==state.currentIndex || r.currentValue!==state.currentValue;
+  state=r;
+  if(changed) render();
 }
 
-function currentDrawObjWithState(st){
-  const idx=st?.currentIndex;
+function simpleBoard(){
+  return board.map(x=>x?x.value:null);
+}
+
+function currentDrawObj(){
+  if(!state)return null;
+  const idx=state.currentIndex;
   if(idx==null||idx<0)return null;
   for(let i=0;i<20;i++){
     if(board[i]&&board[i].drawIndex===idx)return{cell:i,value:board[i].value};
@@ -143,15 +171,15 @@ function currentDrawObjWithState(st){
   return null;
 }
 
-function currentDrawObj(){return currentDrawObjWithState(state);}
-function simpleBoard(){return board.map(x=>x?x.value:null);}
-
 function render(){
-  if(!state)return;
+  if(!state||isRendering)return;
+  isRendering=true;
+
   const cd=currentDrawObj();
   const status=state.currentIndex>=0
     ? '현재 숫자를 놓을 칸을 선택하세요. 다음 숫자가 나오기 전까지 위치를 바꿀 수 있습니다.'
     : '다음 숫자를 기다리는 중입니다.';
+
   renderBoard(app,{
     board:simpleBoard(),
     currentDraw:cd,
@@ -163,6 +191,8 @@ function render(){
     onCell:place,
     onDone:saveNow
   });
+
+  isRendering=false;
 }
 
 function place(cell){
@@ -171,44 +201,31 @@ function place(cell){
   const idx=state.currentIndex;
   const val=state.currentValue;
 
-  // 현재 뽑힌 숫자만 이동 가능. 이전 숫자들은 고정.
+  // 현재 회차 숫자만 이동 가능. 이전 회차 숫자는 유지.
   board=board.map(x=>x&&x.drawIndex===idx?null:x);
   board[cell]={drawIndex:idx,value:val};
 
-  render();       // 즉시 반영
-  saveSoon();     // 저장은 백그라운드
-}
-
-function saveSoon(){
+  render();       // 즉시 표시
   clearTimeout(saveTimer);
-  saveTimer=setTimeout(saveNow,120);
+  saveTimer=setTimeout(saveNow,80);
 }
 
 async function saveNow(){
-  if(!room||!sid||!state||saving)return;
-  clearTimeout(saveTimer);
-  saving=true;
+  if(!room||!sid||!state)return;
 
   const cd=currentDrawObj();
   const currentPlaced=cd?state.currentIndex:-999;
 
-  try{
-    await patch('/streamsRooms/'+room+'/students/'+sid,{
-      name,
-      board,
-      boardSimple:simpleBoard(),
-      currentPlaced,
-      updated:Date.now()
-    });
-  }finally{
-    saving=false;
-  }
+  await patch('/streamsRooms/'+room+'/students/'+sid,{
+    name,
+    board,
+    boardSimple:simpleBoard(),
+    currentPlaced,
+    updated:Date.now()
+  });
 }
 
-if(joined){
-  init().then(()=>setInterval(pollRoom,700));
-}else{
-  nameScreen();
-}
+if(joined) init();
+else nameScreen();
 </script>
 </body></html>
