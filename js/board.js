@@ -28,20 +28,16 @@ function renderBoard(container, opt={}){
  if(opt.onCell) container.querySelectorAll(".cell").forEach(el=>el.onclick=()=>opt.onCell(Number(el.dataset.idx)));
 }
 
-
-
-// 3.3.8 SAFE: 전자칠판/교사용 보드 보기 전용 안전 렌더러
-// 기존 복잡한 보드 전용 렌더링 대신 renderBoard를 사용하고,
-// 상태바/상단바만 숨겨 흰 화면 오류를 방지합니다.
 function renderBoardOnly(container, opt={}){
-  renderBoard(container, {
-    board: opt.board || Array(20).fill(null),
-    name: opt.name || "",
-    room: opt.room || "",
-    currentValue: opt.currentValue || "-",
-    status: "",
-    interactive: false
-  });
-  container.querySelectorAll(".footer").forEach(el=>el.style.display="none");
-  container.querySelectorAll(".topbar").forEach(el=>el.style.display="none");
+ const board=opt.board||Array(20).fill(null);
+ const name=opt.name||"";
+ const room=opt.room||"";
+ const current=opt.currentValue||"-";
+ const sc=scoreBoard(board);
+ container.innerHTML=`<div class="board-only-wrap"><div class="board-only-scale"><div class="game-board">${renderScoreTable()}
+ <div class="logo"><div class="en">STREAMS</div><div class="kr">스트림스</div></div>
+ <div class="info"><div class="row"><div class="lab">이름</div><div class="val">${name}</div></div><div class="row"><div class="lab">점수</div><div class="val">${sc.score}점</div></div></div>
+ <div class="rules"><div>1. 다음 숫자 뽑기<br>전에 꼭 쓰기</div><div>2. 이웃한 같은<br>숫자는 오름차순 OK</div><div>3. 다음 숫자가<br>나오면 수정 불가</div><div>1~10</div><div>11~19<br>11~19</div><div>20~30 ★</div></div>
+ ${Array.from({length:20}).map((_,i)=>{const s=cellStyle(i), val=board[i]||""; return `<div class="cell ${s.cls} ${val?'filled':''}" style="left:${s.x}px;top:${s.y}px"><div class="shape"></div>${val}</div>`}).join("")}
+ </div></div></div>`;
 }

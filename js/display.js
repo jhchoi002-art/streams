@@ -17,7 +17,7 @@ function rankedStudents(){
     const s=students[k]||{};
     const b=s.boardSimple||simpleBoard(s.board||Array(20).fill(null));
     const sc=(typeof s.score==="number"&&typeof s.run==="number")?{score:s.score,run:s.run}:scoreBoard(b);
-    return {id:k,name:s.name||k,board:b,currentPlaced:s.currentPlaced,score:sc.score,run:sc.run};
+    return {id:k,name:s.name||decodeURIComponent(k),board:b,currentPlaced:s.currentPlaced,score:sc.score,run:sc.run};
   }).sort((a,b)=>b.score-a.score||b.run-a.run||a.name.localeCompare(b.name,"ko"));
 }
 
@@ -45,46 +45,32 @@ function renderDisplay(){
 }
 
 function openDisplayBoard(id){
-  try{
-    const s=(displayData?.students||{})[id];
-    if(!s)return;
-    const b=s.boardSimple||simpleBoard(s.board||Array(20).fill(null));
-    const sc=(typeof s.score==="number"&&typeof s.run==="number")?{score:s.score,run:s.run}:scoreBoard(b);
-    $("displayModal").classList.add("show");
-    document.querySelector(".display-modal-box").classList.add("board-view");
-    $("displayModalTitle").textContent=(s.name||id)+" 학생 보드";
-    $("displayModalContent").innerHTML=`<div class="single-board-only">
-      <div class="board-only-title">${s.name||id}</div>
-      <div class="board-only-sub">오름차순 ${sc.run}칸 / ${sc.score}점</div>
-      <div id="singleBoard"></div>
-    </div>`;
-    renderBoardOnly($("singleBoard"),{board:b,name:s.name||id,room,currentValue:displayData.currentValue||"-"});
-  }catch(e){
-    console.error(e);
-    $("displayModal").classList.add("show");
-    $("displayModalTitle").textContent="보드 표시 오류";
-    $("displayModalContent").innerHTML="<p>학생 보드를 표시하는 중 오류가 발생했습니다.</p>";
-  }
+  const s=(displayData?.students||{})[id];
+  if(!s)return;
+  const b=s.boardSimple||simpleBoard(s.board||Array(20).fill(null));
+  const sc=scoreBoard(b);
+  $("displayModal").classList.add("show");
+  document.querySelector(".display-modal-box").classList.add("board-view");
+  $("displayModalTitle").textContent=(s.name||decodeURIComponent(id))+" 학생 보드";
+  $("displayModalContent").innerHTML=`<div class="single-board-only">
+    <div class="board-only-title">${s.name||decodeURIComponent(id)}</div>
+    <div class="board-only-sub">오름차순 ${sc.run}칸 / ${sc.score}점</div>
+    <div id="singleBoard"></div>
+  </div>`;
+  renderBoardOnly($("singleBoard"),{board:b,name:s.name||decodeURIComponent(id),room,currentValue:displayData.currentValue||"-"});
 }
 
 function openTop3(){
-  try{
-    const top=rankedStudents().slice(0,3);
-    if(!top.length)return;
-    $("displayModal").classList.add("show");
-    document.querySelector(".display-modal-box").classList.add("board-view");
-    $("displayModalTitle").textContent="TOP3 보드 비교";
-    $("displayModalContent").innerHTML=`<div class="top3-grid">${top.map((s,i)=>`<div class="top3-card">
-      <h3>${i===0?'🥇':i===1?'🥈':'🥉'} ${s.name}<br>오름차순 ${s.run}칸 / ${s.score}점</h3>
-      <div id="topBoard${i}"></div>
-    </div>`).join("")}</div>`;
-    top.forEach((s,i)=>renderBoardOnly($("topBoard"+i),{board:s.board,name:s.name,room,currentValue:displayData.currentValue||"-"}));
-  }catch(e){
-    console.error(e);
-    $("displayModal").classList.add("show");
-    $("displayModalTitle").textContent="TOP3 표시 오류";
-    $("displayModalContent").innerHTML="<p>TOP3 보드를 표시하는 중 오류가 발생했습니다.</p>";
-  }
+  const top=rankedStudents().slice(0,3);
+  if(!top.length)return;
+  $("displayModal").classList.add("show");
+  document.querySelector(".display-modal-box").classList.add("board-view");
+  $("displayModalTitle").textContent="TOP3 보드 비교";
+  $("displayModalContent").innerHTML=`<div class="top3-grid">${top.map((s,i)=>`<div class="top3-card">
+    <h3>${i===0?'🥇':i===1?'🥈':'🥉'} ${s.name}<br>오름차순 ${s.run}칸 / ${s.score}점</h3>
+    <div id="topBoard${i}"></div>
+  </div>`).join("")}</div>`;
+  top.forEach((s,i)=>renderBoardOnly($("topBoard"+i),{board:s.board,name:s.name,room,currentValue:displayData.currentValue||"-"}));
 }
 
 function closeDisplayModal(){

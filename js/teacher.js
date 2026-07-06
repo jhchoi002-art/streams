@@ -159,22 +159,16 @@ function render(){
 }
 
 function openStudent(key){
-  try{
-    const s=studentsObj()[key];
-    if(!s)return;
-    const b=s.boardSimple||simpleBoard(s.board||Array(20).fill(null));
-    $("modal").classList.remove("hidden");
-    $("modalTitle").textContent=(s.name||key)+" 학생 판";
-    renderBoard($("modalBoard"),{
-      board:b,
-      name:s.name||key,
-      room,
-      currentValue:roomData.currentValue||"-"
-    });
-  }catch(e){
-    console.error(e);
-    alert("학생 보드판을 여는 중 오류가 발생했습니다.");
-  }
+  const s=studentsObj()[key];
+  if(!s)return;
+  $("modal").classList.remove("hidden");
+  $("modalTitle").textContent=(s.name||key)+" 학생 판";
+  renderBoard($("modalBoard"),{
+    board:s.boardSimple||simpleBoard(s.board||Array(20).fill(null)),
+    name:s.name||key,
+    room,
+    currentValue:roomData.currentValue||"-"
+  });
 }
 
 async function refreshRoom(){
@@ -253,41 +247,6 @@ async function copyRoomCode(){
   }
   try{
     await navigator.clipboard.writeText(code);
-    showCopyToast("방코드를 복사했습니다.");
-  }catch(e){
-    const temp=document.createElement("textarea");
-    temp.value=code;
-    document.body.appendChild(temp);
-    temp.select();
-    document.execCommand("copy");
-    temp.remove();
-    showCopyToast("방코드를 복사했습니다.");
-  }
-}
-
-if(document.getElementById("copyCodeBtn")) $("copyCodeBtn").onclick=copyRoomCode;
-
-start();
-
-
-function showCopyToast(msg){
-  const old=document.querySelector(".copy-toast");
-  if(old) old.remove();
-  const t=document.createElement("div");
-  t.className="copy-toast";
-  t.textContent=msg;
-  document.body.appendChild(t);
-  setTimeout(()=>t.remove(),1200);
-}
-async function copyRoomCode(){
-  const el=document.getElementById("roomCode");
-  const code=(el&&el.textContent?el.textContent.trim():"");
-  if(!code||code==="-"){
-    showCopyToast("복사할 방코드가 없습니다.");
-    return;
-  }
-  try{
-    await navigator.clipboard.writeText(code);
   }catch(e){
     const temp=document.createElement("textarea");
     temp.value=code;
@@ -298,4 +257,8 @@ async function copyRoomCode(){
   }
   showCopyToast("방코드를 복사했습니다.");
 }
+
 if(document.getElementById("copyCodeBtn")) $("copyCodeBtn").onclick=copyRoomCode;
+
+
+start();
