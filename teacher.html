@@ -38,6 +38,38 @@ a{text-decoration:none;color:inherit}
 .student-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}.student-item{border:2px solid #c9d7ea;border-radius:10px;padding:10px;cursor:pointer;background:#f8fbff;font-weight:900}.student-item.done{border-color:var(--green);background:#effff6}.student-item .small{font-size:13px;color:#345}.rank-row{display:flex;justify-content:space-between;border-bottom:1px solid #e4e9f1;padding:8px 0;font-weight:900}
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:1000}.modal-bg.show{display:flex}.modal{background:white;border-radius:16px;width:min(1120px,95vw);max-height:94vh;overflow:auto;padding:20px;position:relative}.close-red{position:absolute;right:14px;top:12px;width:54px;height:54px;border-radius:50%;border:0;background:#e03333;color:#fff;font-size:30px;font-weight:900;cursor:pointer;z-index:5}.modal-title{text-align:center;font-size:28px;font-weight:900;margin-bottom:8px;color:var(--navy)}.nav-stu{display:flex;justify-content:center;gap:10px;margin:8px 0}.preview-scale{transform:scale(.66);transform-origin:top center;height:500px}.preview-scale .topbar,.preview-scale .footer{display:none}.preview-scale .board-stage{padding:0;background:white}.preview-scale .board{margin:0 auto}
 .display-body{background:#0b1730;color:white;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}.display-num{font-size:180px;font-weight:900;color:#ffd91a}.display-code{font-size:60px;font-weight:900}.display-sub{font-size:30px;margin-top:20px}
+
+/* ===== STREAMS ONLINE 2.0 EFFECTS ===== */
+@keyframes numberPulse{0%{transform:scale(1)}45%{transform:scale(1.28)}100%{transform:scale(1)}}
+@keyframes cellPop{0%{transform:scale(.86)}65%{transform:scale(1.14)}100%{transform:scale(1)}}
+@keyframes softBlink{0%,100%{filter:brightness(1)}50%{filter:brightness(1.25)}}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+@keyframes glowBlue{0%,100%{box-shadow:0 0 0 rgba(11,114,223,0)}50%{box-shadow:0 0 18px rgba(11,114,223,.5)}}
+@keyframes fadeSlide{0%{opacity:0;transform:translateY(10px)}100%{opacity:1;transform:translateY(0)}}
+.topbar .yellow{display:inline-block;animation:numberPulse .45s ease}
+.cell.current .shape{animation:softBlink 1.1s infinite, glowBlue 1.1s infinite}
+.cell.filled .shape{background:#eef2f7!important;border-color:#334155!important}
+.cell.just-placed{animation:cellPop .22s ease}
+.cell.shake{animation:shake .32s ease}
+.student-item.done::after{content:" ✓";color:#18ad6b;font-weight:900}
+.rank-row{animation:fadeSlide .25s ease}
+.display-num{animation:numberPulse .5s ease}
+.modal{animation:fadeSlide .18s ease}
+.toast{
+  position:fixed;left:50%;bottom:110px;transform:translateX(-50%);
+  background:#06285c;color:white;padding:14px 22px;border-radius:999px;
+  font-size:20px;font-weight:900;box-shadow:0 8px 22px rgba(0,0,0,.2);z-index:9999;
+  animation:fadeSlide .2s ease;
+}
+.final-badge{
+  position:fixed;inset:0;background:rgba(6,40,92,.88);z-index:2000;color:white;
+  display:flex;align-items:center;justify-content:center;text-align:center;
+}
+.final-badge .box{background:white;color:#06285c;border-radius:20px;padding:36px 52px;box-shadow:0 18px 45px rgba(0,0,0,.35)}
+.final-badge .big{font-size:58px;font-weight:900;margin:12px 0}
+.final-badge .sub{font-size:28px;font-weight:900}
+.final-badge button{margin-top:22px}
+
 </style></head><body><div class="topbar"><div>교사용 화면</div><div class="center">현재 숫자 : <span class="yellow" id="curTop">-</span></div><div>방코드 : <span id="topRoom">-</span></div></div>
 <div class="wrap teacher-grid"><div><div class="card"><h2>방코드</h2><div class="big-code" id="roomCode">-</div><h3>학생 입장 QR</h3><img class="qr" id="qr"><div id="joinUrl"></div></div><div class="card"><h2>학생 목록</h2><div id="students" class="student-list">아직 학생 없음</div></div><div class="card"><h2>선택한 학생</h2><div id="selected">학생 이름을 클릭하면 판을 볼 수 있습니다.</div></div></div><div><div class="card"><button class="btn green" id="newRoom">새 방 만들기</button> <button class="btn" id="draw">다음 숫자 뽑기</button> <button class="btn red" id="end">종료/채점</button> <button class="btn gray" id="reset">초기화</button><p><a id="displayLink" target="_blank">전자칠판 화면 열기</a></p></div><div class="card"><h2>순위</h2><div id="rank"></div></div></div></div>
 <div class="modal-bg" id="modalBg"><div class="modal"><button class="close-red" id="closeModal">×</button><div class="modal-title" id="modalTitle"></div><div class="nav-stu"><button class="btn gray" id="prevStu">◀ 이전 학생</button><button class="btn gray" id="nextStu">다음 학생 ▶</button></div><div class="preview-scale"><div id="modalBoard"></div></div></div></div><script>
@@ -73,11 +105,11 @@ function renderBoard(container,opt={}){
 let room=localStorage.getItem('streamsTeacherRoom')||'',state=null,selectedId=null,studentKeys=[];
 async function createRoom(){room=makeCode();localStorage.setItem('streamsTeacherRoom',room);await put('/streamsRooms/'+room,{created:Date.now(),currentIndex:-1,currentValue:'-',deck:makeDeck().slice(0,20),students:{},ended:false});renderStatic();await load();}
 function renderStatic(){roomCode.textContent=room||'-';topRoom.textContent=room||'-';const join=location.origin+location.pathname.replace('teacher.html','student.html')+'?room='+(room||'');joinUrl.textContent=join;qr.src='https://api.qrserver.com/v1/create-qr-code/?size=230x230&data='+encodeURIComponent(join);displayLink.href='display.html?room='+(room||'');}
-async function load(){if(!room){await createRoom();return;}state=await get('/streamsRooms/'+room);if(!state){await createRoom();return;}renderStatic();curTop.textContent=state.currentValue||'-';const ss=state.students||{};studentKeys=Object.keys(ss);students.innerHTML=studentKeys.length?studentKeys.map(k=>{const s=ss[k],done=s.currentPlaced===state.currentIndex,sc=scoreBoard(s.boardSimple||[]);return `<div class="student-item ${done?'done':''}" data-id="${k}"><div>${s.name||k}</div><div class="small">${sc.run}칸 / ${sc.score}점 ${done?'✓':''}</div></div>`}).join(''):'아직 학생 없음';document.querySelectorAll('.student-item').forEach(el=>el.onclick=()=>openStudent(el.dataset.id));const ranks=studentKeys.map(k=>{const s=ss[k],sc=scoreBoard(s.boardSimple||[]);return{name:s.name||k,score:sc.score,run:sc.run}}).sort((a,b)=>b.score-a.score||b.run-a.run);rank.innerHTML=ranks.map((r,i)=>`<div class="rank-row"><span>${i+1}. ${r.name}</span><span>${r.run}칸 / ${r.score}점</span></div>`).join('');}
+async function load(){if(!room){await createRoom();return;}state=await get('/streamsRooms/'+room);if(!state){await createRoom();return;}renderStatic();curTop.textContent=state.currentValue||'-';const ss=state.students||{};studentKeys=Object.keys(ss);students.innerHTML=studentKeys.length?studentKeys.map(k=>{const s=ss[k],done=s.currentPlaced===state.currentIndex,sc=scoreBoard(s.boardSimple||[]);return `<div class="student-item ${done?'done':''}" data-id="${k}"><div>${s.name||k}</div><div class="small">${sc.run}칸 / ${sc.score}점 ${done?'✓':''}</div></div>`}).join(''):'아직 학생 없음';document.querySelectorAll('.student-item').forEach(el=>el.onclick=()=>openStudent(el.dataset.id));const ranks=studentKeys.map(k=>{const s=ss[k],sc=scoreBoard(s.boardSimple||[]);return{name:s.name||k,score:sc.score,run:sc.run}}).sort((a,b)=>b.score-a.score||b.run-a.run);rank.innerHTML=ranks.map((r,i)=>{const medal=i===0?'🥇 ':i===1?'🥈 ':i===2?'🥉 ':'';return `<div class="rank-row"><span>${medal}${i+1}. ${r.name}</span><span>${r.run}칸 / ${r.score}점</span></div>`}).join('');}
 function openStudent(id){selectedId=id;const s=(state.students||{})[id];if(!s)return;const sc=scoreBoard(s.boardSimple||[]);selected.innerHTML=`<b>${s.name}</b> : ${sc.run}칸 / ${sc.score}점`;modalTitle.textContent=(s.name||id)+' 학생 판';modalBg.classList.add('show');renderBoard(modalBoard,{board:s.boardSimple||Array(20).fill(null),name:s.name||'',roomCode:room,currentValue:state.currentValue||'-'});}
 function closeModal(){modalBg.classList.remove('show');}
 closeModal.onclick=closeModal;modalBg.onclick=e=>{if(e.target.id==='modalBg')closeModal();};document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 prevStu.onclick=()=>{let i=studentKeys.indexOf(selectedId);if(i>0)openStudent(studentKeys[i-1]);};nextStu.onclick=()=>{let i=studentKeys.indexOf(selectedId);if(i>=0&&i<studentKeys.length-1)openStudent(studentKeys[i+1]);};
-newRoom.onclick=createRoom;draw.onclick=async()=>{if(!state)return;const ni=(state.currentIndex??-1)+1;if(ni>=20){alert('20개를 모두 뽑았습니다.');return;}await patch('/streamsRooms/'+room,{currentIndex:ni,currentValue:state.deck[ni]});await load();};end.onclick=async()=>{await patch('/streamsRooms/'+room,{ended:true});await load();};reset.onclick=async()=>{if(confirm('현재 방을 초기화할까요?'))await createRoom();};
+newRoom.onclick=createRoom;draw.onclick=async()=>{if(!state)return;const ni=(state.currentIndex??-1)+1;if(ni>=20){alert('20개를 모두 뽑았습니다.');return;}draw.disabled=true;draw.textContent='뽑는 중...';setTimeout(async()=>{await patch('/streamsRooms/'+room,{currentIndex:ni,currentValue:state.deck[ni]});draw.disabled=false;draw.textContent='다음 숫자 뽑기';await load();},280);};end.onclick=async()=>{await patch('/streamsRooms/'+room,{ended:true});await load();};reset.onclick=async()=>{if(confirm('현재 방을 초기화할까요?'))await createRoom();};
 renderStatic();load();setInterval(load,1200);
 </script></body></html>
