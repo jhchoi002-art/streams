@@ -1,2 +1,2 @@
-STREAMS ONLINE 1.0 FINAL
-학생 화면 레이아웃 수정 및 학생 입장 입력창 초기화 버그 수정본
+STREAMS ONLINE 1.0 FINAL GRID
+학생 화면을 CSS Grid로 재구성한 정식 배포판입니다.
