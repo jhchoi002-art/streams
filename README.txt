@@ -1,4 +1,2 @@
-STREAMS ONLINE 1.0 FINAL
-Firebase Realtime Database 규칙:
-{"rules":{".read":true,".write":true}}
-GitHub 루트에 모든 파일을 업로드하세요.
+STREAMS ONLINE 1.0 FINAL 정식 배포판
+Firebase Realtime Database 규칙: read/write true
