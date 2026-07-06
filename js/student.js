@@ -6,12 +6,13 @@ let board=Array(20).fill(null);
 let currentPlaced=-999;
 let resetToken="";
 let pollTimer=null;
-let heartbeatTimer=null;
+let onlineTimer=null;
 let joined=false;
 
 let clientId=localStorage.getItem("streamsClientId")||("c_"+Math.random().toString(36).slice(2)+Date.now().toString(36));
 localStorage.setItem("streamsClientId",clientId);
 
+// QR로 들어와도 이름 입력 화면 먼저
 $("roomInput").value=room;
 $("nameInput").value="";
 $("joinBtn").onclick=join;
@@ -20,18 +21,18 @@ function studentPath(){
   return "/streamsRooms/"+room+"/students/"+key;
 }
 
-function setJoinMessage(msg){
-  $("joinMsg").textContent=msg||"";
+function msg(t){
+  $("joinMsg").textContent=t||"";
 }
 
 async function join(){
   try{
-    setJoinMessage("");
+    msg("");
     room=$("roomInput").value.trim().toUpperCase();
     name=cleanName($("nameInput").value);
 
     if(!room||!name){
-      setJoinMessage("방코드와 이름을 입력하세요.");
+      msg("방코드와 이름을 입력하세요.");
       return;
     }
 
@@ -39,7 +40,7 @@ async function join(){
 
     const data=await fbGet("/streamsRooms/"+room);
     if(!data){
-      setJoinMessage("방을 찾을 수 없습니다.");
+      msg("방을 찾을 수 없습니다.");
       return;
     }
 
@@ -48,10 +49,10 @@ async function join(){
 
     const existing=await fbGet(studentPath());
 
-    // 다른 기기에서 같은 이름이 실제 접속 중일 때만 차단.
-    // 같은 기기(clientId 동일), 예전 기록(clientId 없음), online=false 기록은 모두 이어서 진행.
+    // 다른 기기 접속 중 차단.
+    // 단, 같은 기기(clientId 동일) 또는 clientId가 없는 기존 기록은 이어서 진행.
     if(existing && existing.online===true && existing.clientId && existing.clientId!==clientId){
-      setJoinMessage("이미 같은 이름으로 다른 기기에서 접속 중입니다. 다른 이름을 입력해주세요.");
+      msg("이미 같은 이름으로 다른 기기에서 접속 중입니다. 다른 이름을 입력해주세요.");
       return;
     }
 
@@ -77,12 +78,16 @@ async function join(){
       });
     }
 
+    // 입장 시 기존 board/currentPlaced는 저장하지 않고 접속 상태만 저장
+    await fbPatch(studentPath(),{
+      name,
+      online:true,
+      clientId
+    });
+
+    joined=true;
     localStorage.setItem("streamsName",name);
     localStorage.setItem("streamsRoom",room);
-    joined=true;
-
-    // 접속 상태만 갱신. board/currentPlaced는 절대 덮어쓰지 않음.
-    await fbPatch(studentPath(),{name,online:true,clientId});
 
     $("joinScreen").classList.add("hidden");
     $("gameScreen").classList.remove("hidden");
@@ -91,9 +96,9 @@ async function join(){
     startPolling();
     startOnlineSignal();
     render();
-  }catch(err){
-    console.error(err);
-    setJoinMessage("입장 중 오류가 발생했습니다. 새로고침 후 다시 시도해주세요.");
+  }catch(e){
+    console.error(e);
+    msg("입장 중 오류가 발생했습니다. 새로고침 후 다시 시도해주세요.");
   }
 }
 
@@ -105,7 +110,8 @@ async function pollRoom(){
 
     const newToken=String(data.resetToken||"");
 
-    if(resetToken&&newToken!==resetToken){
+    // 교사가 초기화했을 때만 보드 삭제
+    if(resetToken && newToken!==resetToken){
       board=Array(20).fill(null);
       currentPlaced=-999;
       roomData=data;
@@ -118,7 +124,7 @@ async function pollRoom(){
     resetToken=newToken;
     roomData=data;
 
-    // 서버 데이터가 있고 로컬 보드가 비었을 때만 복구.
+    // 로컬 보드가 비어 있을 때만 서버 보드 복구
     const serverMe=data.students?.[key];
     if(serverMe&&serverMe.board){
       const serverHas=serverMe.board.some(x=>x);
@@ -130,8 +136,8 @@ async function pollRoom(){
     }
 
     render();
-  }catch(err){
-    console.error(err);
+  }catch(e){
+    console.error(e);
   }
 }
 
@@ -142,8 +148,8 @@ function startPolling(){
 }
 
 function startOnlineSignal(){
-  clearInterval(heartbeatTimer);
-  heartbeatTimer=setInterval(()=>{
+  clearInterval(onlineTimer);
+  onlineTimer=setInterval(()=>{
     if(room&&key){
       fbPatch(studentPath(),{name,online:true,clientId});
     }
@@ -160,18 +166,23 @@ function currentCell(){
 }
 
 function render(){
-  const idx=roomData?.currentIndex??-1;
-  renderBoard($("gameScreen"),{
-    board:simpleBoard(board),
-    room,
-    name,
-    currentValue:roomData?.currentValue||"-",
-    currentCell:currentCell(),
-    status:idx>=0
-      ?"현재 숫자를 빈칸에 놓으세요. 다음 숫자가 나오기 전까지 이동할 수 있습니다."
-      :"다음 숫자를 기다리는 중입니다.",
-    onCell:place
-  });
+  try{
+    const idx=roomData?.currentIndex??-1;
+    renderBoard($("gameScreen"),{
+      board:simpleBoard(board),
+      room,
+      name,
+      currentValue:roomData?.currentValue||"-",
+      currentCell:currentCell(),
+      status:idx>=0
+        ?"현재 숫자를 빈칸에 놓으세요. 다음 숫자가 나오기 전까지 이동할 수 있습니다."
+        :"다음 숫자를 기다리는 중입니다.",
+      onCell:place
+    });
+  }catch(e){
+    console.error(e);
+    $("gameScreen").innerHTML='<div class="join-card"><h1>화면 표시 오류</h1><p class="warning">새로고침 후 다시 입장해주세요.</p></div>';
+  }
 }
 
 async function place(cell){
@@ -230,4 +241,4 @@ document.addEventListener("visibilitychange",()=>{
   }
 });
 
-// 자동 join 없음. QR로 들어와도 반드시 이름 입력 후 입장.
+// 자동 join 없음

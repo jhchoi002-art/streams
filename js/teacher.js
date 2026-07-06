@@ -159,17 +159,22 @@ function render(){
 }
 
 function openStudent(key){
-  const s=studentsObj()[key];
-  if(!s)return;
-  const b=s.boardSimple||simpleBoard(s.board||Array(20).fill(null));
-  $("modal").classList.remove("hidden");
-  $("modalTitle").textContent=(s.name||key)+" 학생 판";
-  renderBoard($("modalBoard"),{
-    board:b,
-    name:s.name||key,
-    room,
-    currentValue:roomData.currentValue||"-"
-  });
+  try{
+    const s=studentsObj()[key];
+    if(!s)return;
+    const b=s.boardSimple||simpleBoard(s.board||Array(20).fill(null));
+    $("modal").classList.remove("hidden");
+    $("modalTitle").textContent=(s.name||key)+" 학생 판";
+    renderBoard($("modalBoard"),{
+      board:b,
+      name:s.name||key,
+      room,
+      currentValue:roomData.currentValue||"-"
+    });
+  }catch(e){
+    console.error(e);
+    alert("학생 보드판을 여는 중 오류가 발생했습니다.");
+  }
 }
 
 async function refreshRoom(){
