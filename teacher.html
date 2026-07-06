@@ -80,8 +80,13 @@ a{text-decoration:none;color:inherit}
 .student-item.done{border-color:#18ad6b!important;background:#effff6!important}
 .footer .done{display:none!important}
 
+
+.student-item.done{transition:background .2s,border-color .2s,transform .15s}
+.student-item.done:hover,.student-item.pending:hover{transform:translateY(-1px)}
+#newRoomTop{margin-left:12px}
+
 </style></head><body><div class="topbar"><div>교사용 화면</div><div class="center">현재 숫자 : <span class="yellow" id="curTop">-</span></div><div>방코드 : <span id="topRoom">-</span></div></div>
-<div class="wrap teacher-grid"><div><div class="card"><h2>방코드</h2><div class="big-code" id="roomCode">-</div><h3>학생 입장 QR</h3><img class="qr" id="qr"><div id="joinUrl"></div></div><div class="card"><h2>학생 목록</h2><div id="students" class="student-list">아직 학생 없음</div></div><div class="card"><h2>선택한 학생</h2><div id="selected">학생 이름을 클릭하면 판을 볼 수 있습니다.</div></div></div><div><div class="card"><button class="btn green" id="newRoom">새 방 만들기</button> <button class="btn" id="draw">다음 숫자 뽑기</button> <button class="btn red" id="end">종료/채점</button> <button class="btn gray" id="reset">초기화</button><p><a id="displayLink" target="_blank">전자칠판 화면 열기</a></p>
+<div class="wrap teacher-grid"><div><div class="card"><h2>방코드 <button class="btn gray" id="newRoomTop" style="float:right;font-size:16px;padding:10px 14px">🔄 새 방</button></h2><div class="big-code" id="roomCode">-</div><h3>학생 입장 QR</h3><img class="qr" id="qr"><div id="joinUrl"></div></div><div class="card"><h2>학생 목록</h2><div id="students" class="student-list">아직 학생 없음</div></div><div class="card"><h2>선택한 학생</h2><div id="selected">학생 이름을 클릭하면 판을 볼 수 있습니다.</div></div></div><div><div class="card"><button class="btn" id="draw">다음 숫자 뽑기</button> <button class="btn red" id="end">종료/채점</button> <button class="btn gray" id="reset">초기화</button><p><a id="displayLink" target="_blank">전자칠판 화면 열기</a></p>
         <div class="turn-progress-wrap">
           <div class="turn-progress-title">이번 턴 입력: <span id="turnCount">0 / 0명</span></div>
           <div class="turn-progress-bar"><div class="turn-progress-fill" id="turnFill"></div></div>
@@ -136,6 +141,11 @@ function openStudent(id){selectedId=id;const s=(state.students||{})[id];if(!s)re
 function closeModal(){modalBg.classList.remove('show');}
 closeModal.onclick=closeModal;modalBg.onclick=e=>{if(e.target.id==='modalBg')closeModal();};document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 prevStu.onclick=()=>{let i=studentKeys.indexOf(selectedId);if(i>0)openStudent(studentKeys[i-1]);};nextStu.onclick=()=>{let i=studentKeys.indexOf(selectedId);if(i>=0&&i<studentKeys.length-1)openStudent(studentKeys[i+1]);};
-newRoom.onclick=createRoom;draw.onclick=async()=>{if(!state)return;const ni=(state.currentIndex??-1)+1;if(ni>=20){alert('20개를 모두 뽑았습니다.');return;}draw.disabled=true;draw.textContent='뽑는 중...';setTimeout(async()=>{await patch('/streamsRooms/'+room,{currentIndex:ni,currentValue:state.deck[ni]});draw.disabled=false;draw.textContent='다음 숫자 뽑기';await load();},280);};end.onclick=async()=>{await patch('/streamsRooms/'+room,{ended:true});await load();};reset.onclick=async()=>{if(confirm('현재 방을 초기화할까요?'))await createRoom();};
-renderStatic();load();setInterval(load,1200);
+function confirmNewRoom(){
+  if(confirm('정말 새 방을 만드시겠습니까?\n현재 게임은 종료되고 새 방코드가 만들어집니다.')){
+    createRoom();
+  }
+}
+if(document.getElementById('newRoomTop')) newRoomTop.onclick=confirmNewRoom;draw.onclick=async()=>{if(!state)return;const ni=(state.currentIndex??-1)+1;if(ni>=20){alert('20개를 모두 뽑았습니다.');return;}draw.disabled=true;draw.textContent='뽑는 중...';setTimeout(async()=>{await patch('/streamsRooms/'+room,{currentIndex:ni,currentValue:state.deck[ni]});draw.disabled=false;await load();},280);};end.onclick=async()=>{await patch('/streamsRooms/'+room,{ended:true});await load();};reset.onclick=async()=>{if(confirm('현재 방을 초기화할까요?'))await createRoom();};
+renderStatic();load();setInterval(load,350);
 </script></body></html>
