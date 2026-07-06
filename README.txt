@@ -1,22 +1,9 @@
-STREAMS ONLINE 3.0 Release Alpha
+STREAMS ONLINE 3.1 Alpha
 
-새 구조:
-- css/style.css
-- css/board.css
-- js/firebase.js
-- js/common.js
-- js/board.js
-- js/teacher.js
-- js/student.js
-- js/display.js
-
-Alpha 포함 기능:
-- 교사용 방 생성, 방코드, QR
-- 학생 입장
-- 숫자 뽑기
-- 학생 숫자 입력
-- 같은 턴 내 이동 가능
-- 이전 턴 숫자칸 입력 불가
-- 교사용 입력 현황 실시간 반영
-- 순위 표시
-- 초기화 시 방코드 유지 및 학생 화면 초기화
+추가/수정:
+- 다음 숫자 뽑기 버튼에 진행 카운트 표시: (0/20), (1/20) ...
+- 미입력 학생이 있으면 다음 숫자 뽑기 전에 경고창 표시
+- 경고창에 입력 완료 수와 미입력 학생 명단 표시
+- 모두 입력했으면 확인창 없이 바로 다음 숫자 공개
+- 교사용 입력현황/학생목록/순위 렌더링 분리
+- 순위는 점수 변화가 있을 때만 다시 그려 깜빡임 완화
