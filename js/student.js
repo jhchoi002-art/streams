@@ -17,10 +17,6 @@ function studentPath(){
   return "/streamsRooms/"+room+"/students/"+key;
 }
 
-function activeStudent(s){
-  return Date.now()-(s?.lastSeen||0)<9000;
-}
-
 async function join(){
   room=$("roomInput").value.trim().toUpperCase();
   name=cleanName($("nameInput").value);
@@ -31,25 +27,32 @@ async function join(){
   }
 
   key=nameKey(name);
+
   const data=await fbGet("/streamsRooms/"+room);
   if(!data){
     $("joinMsg").textContent="방을 찾을 수 없습니다.";
     return;
   }
 
-  const existing=(data.students||{})[key];
+  roomData=data;
+  resetToken=String(data.resetToken||"");
 
-  // 기존 기록이 있으면 무조건 그 기록으로 이어서 한다. 절대 빈 board로 덮어쓰지 않는다.
-  if(existing){
-    board=existing.board||Array(20).fill(null);
+  // 3.3 핵심: 이름키로 저장된 기존 기록을 먼저 불러와 그대로 복구
+  const existing=await fbGet(studentPath());
+
+  if(existing&&existing.board){
+    board=existing.board;
     currentPlaced=typeof existing.currentPlaced==="number"?existing.currentPlaced:-999;
   }else{
     board=Array(20).fill(null);
     currentPlaced=-999;
+    const scoreInfo=scorePayloadFromBoard(board);
     await fbPatch(studentPath(),{
       name,
       board,
-      boardSimple:simpleBoard(board),
+      boardSimple:scoreInfo.boardSimple,
+      score:scoreInfo.score,
+      run:scoreInfo.run,
       currentPlaced:-999,
       joined:Date.now(),
       updated:Date.now(),
@@ -59,12 +62,10 @@ async function join(){
   }
 
   localStorage.setItem("streamsName",name);
-  roomData=data;
-  resetToken=String(data.resetToken||"");
+  localStorage.setItem("streamsRoom",room);
   joined=true;
 
-  // 입장 시에는 board/currentPlaced를 저장하지 않고 접속 상태만 저장한다.
-  // 이게 기존 보드가 날아가던 핵심 원인이었음.
+  // 입장 시 board는 절대 덮어쓰지 않고 접속 상태만 갱신
   await fbPatch(studentPath(),{
     name,
     lastSeen:Date.now(),
@@ -87,7 +88,7 @@ async function pollRoom(){
 
   const newToken=String(data.resetToken||"");
 
-  // 교사가 초기화했을 때만 보드를 삭제
+  // 교사가 초기화했을 때만 보드 삭제
   if(resetToken&&newToken!==resetToken){
     board=Array(20).fill(null);
     currentPlaced=-999;
@@ -101,16 +102,11 @@ async function pollRoom(){
   resetToken=newToken;
   roomData=data;
 
-  // 서버에 있는 내 데이터를 읽어와서 재입장/다른 탭 상태를 반영.
-  // 단, 이미 조작 중인 현재 로컬이 비어있지 않은데 서버가 비어있으면 덮어쓰지 않음.
+  // 재입장/새로고침 복구용: 서버에 내 보드가 있고 로컬이 비어 있으면 복구
   const serverMe=data.students?.[key];
-  if(serverMe&&serverMe.board){
-    const serverHas = serverMe.board.some(x=>x);
-    const localHas = board.some(x=>x);
-    if(serverHas || !localHas){
-      board=serverMe.board;
-      currentPlaced=typeof serverMe.currentPlaced==="number"?serverMe.currentPlaced:currentPlaced;
-    }
+  if(serverMe&&serverMe.board&&!board.some(x=>x)){
+    board=serverMe.board;
+    currentPlaced=typeof serverMe.currentPlaced==="number"?serverMe.currentPlaced:currentPlaced;
   }
 
   render();
@@ -118,7 +114,7 @@ async function pollRoom(){
 
 function startPolling(){
   clearInterval(pollTimer);
-  pollTimer=setInterval(pollRoom,500);
+  pollTimer=setInterval(pollRoom,700);
   pollRoom();
 }
 
@@ -180,10 +176,15 @@ async function place(cell){
 async function saveStudent(){
   if(!room||!key)return;
   const updated=Date.now();
+  const scoreInfo=scorePayloadFromBoard(board);
+
   await fbPatch(studentPath(),{
     name,
     board,
-    boardSimple:simpleBoard(board),
+    boardSimple:scoreInfo.boardSimple,
+    score:scoreInfo.score,
+    run:scoreInfo.run,
+    bestRun:scoreInfo.bestRun,
     currentPlaced,
     updated,
     lastSeen:updated,

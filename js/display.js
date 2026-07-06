@@ -16,7 +16,7 @@ function rankedStudents(){
   return Object.keys(students).map(k=>{
     const s=students[k]||{};
     const b=s.boardSimple||simpleBoard(s.board||Array(20).fill(null));
-    const sc=scoreBoard(b);
+    const sc=(typeof s.score==="number"&&typeof s.run==="number")?{score:s.score,run:s.run}:scoreBoard(b);
     return {id:k,name:s.name||decodeURIComponent(k),board:b,currentPlaced:s.currentPlaced,score:sc.score,run:sc.run};
   }).sort((a,b)=>b.score-a.score||b.run-a.run||a.name.localeCompare(b.name,"ko"));
 }

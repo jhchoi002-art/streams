@@ -69,3 +69,16 @@ function nameKey(name){
 function studentArray(students){
   return Object.keys(students||{}).map(k=>({id:k,...students[k]}));
 }
+
+// ===== STREAMS 3.3 안정화용 이름 키 =====
+// Firebase path 문제를 피하기 위해 학생 이름을 base64url key로 저장합니다.
+function nameKey(name){
+  const s=cleanName(name);
+  const b64=btoa(unescape(encodeURIComponent(s)));
+  return "n_" + b64.replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+}
+function scorePayloadFromBoard(board){
+  const b=simpleBoard(board||Array(20).fill(null));
+  const sc=scoreBoard(b);
+  return {boardSimple:b, score:sc.score, run:sc.run, bestRun:sc.bestRun||sc.run};
+}
