@@ -9,11 +9,9 @@ let pollTimer=null;
 let heartbeatTimer=null;
 let joined=false;
 
-// 같은 브라우저/기기 판별용
 let clientId=localStorage.getItem("streamsClientId")||("c_"+Math.random().toString(36).slice(2)+Date.now().toString(36));
 localStorage.setItem("streamsClientId",clientId);
 
-// QR로 들어온 경우 방코드만 채우고, 이름은 자동 입력/자동 입장하지 않음
 $("roomInput").value=room;
 $("nameInput").value="";
 $("joinBtn").onclick=join;
@@ -50,16 +48,14 @@ async function join(){
 
     const existing=await fbGet(studentPath());
 
-    // 다른 기기에서 같은 이름이 접속 중이면 차단
-    // 같은 기기(clientId 동일)는 새로고침/재입장이므로 허용
-    // 기존 기록에 clientId가 없는 경우는 이전 버전 기록으로 보고 허용
+    // 다른 기기에서 같은 이름이 실제 접속 중일 때만 차단.
+    // 같은 기기(clientId 동일), 예전 기록(clientId 없음), online=false 기록은 모두 이어서 진행.
     if(existing && existing.online===true && existing.clientId && existing.clientId!==clientId){
       setJoinMessage("이미 같은 이름으로 다른 기기에서 접속 중입니다. 다른 이름을 입력해주세요.");
       return;
     }
 
     if(existing && existing.board){
-      // 핵심: 기존 보드/currentPlaced 복구
       board=existing.board;
       currentPlaced=typeof existing.currentPlaced==="number" ? existing.currentPlaced : -999;
     }else{
@@ -83,15 +79,10 @@ async function join(){
 
     localStorage.setItem("streamsName",name);
     localStorage.setItem("streamsRoom",room);
-
     joined=true;
 
-    // 입장 시에는 기존 board/currentPlaced를 절대 덮어쓰지 않고 접속 상태만 갱신
-    await fbPatch(studentPath(),{
-      name,
-      online:true,
-      clientId
-    });
+    // 접속 상태만 갱신. board/currentPlaced는 절대 덮어쓰지 않음.
+    await fbPatch(studentPath(),{name,online:true,clientId});
 
     $("joinScreen").classList.add("hidden");
     $("gameScreen").classList.remove("hidden");
@@ -114,7 +105,6 @@ async function pollRoom(){
 
     const newToken=String(data.resetToken||"");
 
-    // 교사가 초기화했을 때만 보드 삭제
     if(resetToken&&newToken!==resetToken){
       board=Array(20).fill(null);
       currentPlaced=-999;
@@ -128,7 +118,7 @@ async function pollRoom(){
     resetToken=newToken;
     roomData=data;
 
-    // 서버에 있는 내 보드가 있고, 로컬이 비어 있으면 복구
+    // 서버 데이터가 있고 로컬 보드가 비었을 때만 복구.
     const serverMe=data.students?.[key];
     if(serverMe&&serverMe.board){
       const serverHas=serverMe.board.some(x=>x);
@@ -151,7 +141,6 @@ function startPolling(){
   pollRoom();
 }
 
-// heartbeat 의존 최소화: 접속 상태 표시와 중복 접속 판단을 위해 online/clientId만 유지
 function startOnlineSignal(){
   clearInterval(heartbeatTimer);
   heartbeatTimer=setInterval(()=>{
@@ -241,4 +230,4 @@ document.addEventListener("visibilitychange",()=>{
   }
 });
 
-// 자동 join 없음. QR로 들어와도 반드시 이름 입력 후 입장
+// 자동 join 없음. QR로 들어와도 반드시 이름 입력 후 입장.

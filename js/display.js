@@ -17,7 +17,7 @@ function rankedStudents(){
     const s=students[k]||{};
     const b=s.boardSimple||simpleBoard(s.board||Array(20).fill(null));
     const sc=(typeof s.score==="number"&&typeof s.run==="number")?{score:s.score,run:s.run}:scoreBoard(b);
-    return {id:k,name:s.name||decodeURIComponent(k),board:b,currentPlaced:s.currentPlaced,score:sc.score,run:sc.run};
+    return {id:k,name:s.name||k,board:b,currentPlaced:s.currentPlaced,score:sc.score,run:sc.run};
   }).sort((a,b)=>b.score-a.score||b.run-a.run||a.name.localeCompare(b.name,"ko"));
 }
 
@@ -48,16 +48,16 @@ function openDisplayBoard(id){
   const s=(displayData?.students||{})[id];
   if(!s)return;
   const b=s.boardSimple||simpleBoard(s.board||Array(20).fill(null));
-  const sc=scoreBoard(b);
+  const sc=(typeof s.score==="number"&&typeof s.run==="number")?{score:s.score,run:s.run}:scoreBoard(b);
   $("displayModal").classList.add("show");
   document.querySelector(".display-modal-box").classList.add("board-view");
-  $("displayModalTitle").textContent=(s.name||decodeURIComponent(id))+" 학생 보드";
+  $("displayModalTitle").textContent=(s.name||id)+" 학생 보드";
   $("displayModalContent").innerHTML=`<div class="single-board-only">
-    <div class="board-only-title">${s.name||decodeURIComponent(id)}</div>
+    <div class="board-only-title">${s.name||id}</div>
     <div class="board-only-sub">오름차순 ${sc.run}칸 / ${sc.score}점</div>
     <div id="singleBoard"></div>
   </div>`;
-  renderBoardOnly($("singleBoard"),{board:b,name:s.name||decodeURIComponent(id),room,currentValue:displayData.currentValue||"-"});
+  renderBoardOnly($("singleBoard"),{board:b,name:s.name||id,room,currentValue:displayData.currentValue||"-"});
 }
 
 function openTop3(){
