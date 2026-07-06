@@ -70,6 +70,16 @@ a{text-decoration:none;color:inherit}
 .final-badge .sub{font-size:28px;font-weight:900}
 .final-badge button{margin-top:22px}
 
+
+.turn-progress-wrap{margin-top:14px}
+.turn-progress-title{font-size:26px;font-weight:900;color:#06285c;margin-bottom:8px}
+.turn-progress-bar{height:24px;background:#e8eef8;border-radius:999px;overflow:hidden;border:1px solid #c9d7ea}
+.turn-progress-fill{height:100%;width:0%;background:#18ad6b;transition:width .25s ease}
+.turn-complete-msg{margin-top:10px;font-size:22px;font-weight:900;color:#18ad6b;display:none}
+.student-item.pending{opacity:.72;background:#f7f8fb;border-color:#d9e1ee}
+.student-item.done{border-color:#18ad6b!important;background:#effff6!important}
+.footer .done{display:none!important}
+
 </style></head><body><div id="app"></div><script>
 const DB="https://minority-stock-game-default-rtdb.asia-southeast1.firebasedatabase.app";
 const $=(id)=>document.getElementById(id);
@@ -94,7 +104,7 @@ function cellStyle(i){
 }
 function renderBoard(container,opt={}){
   const board=opt.board||Array(20).fill(null),name=opt.name||"",room=opt.roomCode||"",cur=opt.currentValue||"-",sc=scoreBoard(board),cd=opt.currentDraw;
-  container.innerHTML=`<div class="student-page"><div class="topbar"><div>방코드 : ${room}</div><div class="center">현재 숫자 : <span class="yellow">${cur}</span></div><div>${name}</div></div><div class="board-stage"><div class="board">${renderScoreTable()}<div class="logo"><div class="en">STREAMS</div><div class="kr">스트림스</div></div><div class="info"><div class="row"><div class="lab">이름</div><div class="val">${name}</div></div><div class="row"><div class="lab">점수</div><div class="val">${sc.score}점</div></div></div><div class="rules"><div>1. 다음 숫자 뽑기<br>전에 꼭 쓰기</div><div>2. 이웃한 같은<br>숫자는 오름차순 OK</div><div>3. 다음 숫자가<br>나오면 수정 불가</div><div>1~10</div><div>11~19<br>11~19</div><div>20~30 ★</div></div>${Array.from({length:20}).map((_,i)=>{const s=cellStyle(i),v=board[i]??'',cc=cd&&cd.cell===i?' current':'';return `<div class="cell ${s.cls}${cc}" data-idx="${i}" style="left:${s.x}px;top:${s.y}px"><div class="shape"></div>${v}</div>`}).join('')}</div></div><div class="footer"><div>${opt.status||'다음 숫자를 기다리는 중입니다.'}</div><div class="score">오름차순 ${sc.run}칸 / ${sc.score}점</div><button class="done" id="doneBtn">입력 완료</button></div></div>`;
+  container.innerHTML=`<div class="student-page"><div class="topbar"><div>방코드 : ${room}</div><div class="center">현재 숫자 : <span class="yellow">${cur}</span></div><div>${name}</div></div><div class="board-stage"><div class="board">${renderScoreTable()}<div class="logo"><div class="en">STREAMS</div><div class="kr">스트림스</div></div><div class="info"><div class="row"><div class="lab">이름</div><div class="val">${name}</div></div><div class="row"><div class="lab">점수</div><div class="val">${sc.score}점</div></div></div><div class="rules"><div>1. 다음 숫자 뽑기<br>전에 꼭 쓰기</div><div>2. 이웃한 같은<br>숫자는 오름차순 OK</div><div>3. 다음 숫자가<br>나오면 수정 불가</div><div>1~10</div><div>11~19<br>11~19</div><div>20~30 ★</div></div>${Array.from({length:20}).map((_,i)=>{const s=cellStyle(i),v=board[i]??'',cc=cd&&cd.cell===i?' current':'';return `<div class="cell ${s.cls}${cc}" data-idx="${i}" style="left:${s.x}px;top:${s.y}px"><div class="shape"></div>${v}</div>`}).join('')}</div></div><div class="footer"><div>${opt.status||'다음 숫자를 기다리는 중입니다.'}</div><div class="score">오름차순 ${sc.run}칸 / ${sc.score}점</div><button class="done" id="doneBtn"></button></div></div>`;
   function fit(){const b=container.querySelector('.board');if(!b)return;const scale=Math.min(1.02,(window.innerWidth-20)/1180,(window.innerHeight-150)/620);b.style.transform=`scale(${scale})`;}fit();window.addEventListener('resize',fit);
   if(opt.interactive){container.querySelectorAll('.cell').forEach(el=>el.onclick=()=>opt.onCell&&opt.onCell(Number(el.dataset.idx)));const b=container.querySelector('#doneBtn');if(b)b.onclick=()=>opt.onDone&&opt.onDone();}else{const b=container.querySelector('#doneBtn');if(b)b.style.display='none';}
 }
@@ -209,7 +219,7 @@ function render(){
 
   const cd=currentDrawObj();
   const status=state.currentIndex>=0
-    ? '현재 숫자를 놓을 칸을 선택하세요. 다음 숫자가 나오기 전까지 위치를 바꿀 수 있습니다.'
+    ? '현재 숫자를 빈칸에 놓으세요. 다음 숫자가 나오기 전까지 이동할 수 있습니다.'
     : '다음 숫자를 기다리는 중입니다.';
 
   renderBoard(app,{

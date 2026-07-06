@@ -70,6 +70,16 @@ a{text-decoration:none;color:inherit}
 .final-badge .sub{font-size:28px;font-weight:900}
 .final-badge button{margin-top:22px}
 
+
+.turn-progress-wrap{margin-top:14px}
+.turn-progress-title{font-size:26px;font-weight:900;color:#06285c;margin-bottom:8px}
+.turn-progress-bar{height:24px;background:#e8eef8;border-radius:999px;overflow:hidden;border:1px solid #c9d7ea}
+.turn-progress-fill{height:100%;width:0%;background:#18ad6b;transition:width .25s ease}
+.turn-complete-msg{margin-top:10px;font-size:22px;font-weight:900;color:#18ad6b;display:none}
+.student-item.pending{opacity:.72;background:#f7f8fb;border-color:#d9e1ee}
+.student-item.done{border-color:#18ad6b!important;background:#effff6!important}
+.footer .done{display:none!important}
+
 </style></head><body><div class="start"><div class="box"><h1>STREAMS ONLINE 1.0 FINAL</h1><p>교사는 방을 만들고, 학생은 QR 또는 방코드로 입장합니다.</p><div class="row"><a class="btn" href="teacher.html">교사용 화면</a><a class="btn gray" href="student.html">학생용 화면</a></div></div></div><script>
 const DB="https://minority-stock-game-default-rtdb.asia-southeast1.firebasedatabase.app";
 const $=(id)=>document.getElementById(id);
