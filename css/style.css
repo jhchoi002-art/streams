@@ -100,3 +100,21 @@ a{text-decoration:none;color:inherit}
   .single-board-only .board-only-scale{transform:scale(.55)}
   .top3-card .board-only-scale{transform:scale(.28)}
 }
+
+/* 3.3.1 Copy Code */
+.room-code-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.copy-code-btn{font-size:17px;padding:11px 14px}
+.copy-toast{
+  position:fixed;
+  left:50%;
+  bottom:34px;
+  transform:translateX(-50%);
+  background:#06285c;
+  color:#fff;
+  padding:13px 20px;
+  border-radius:999px;
+  font-size:18px;
+  font-weight:900;
+  box-shadow:0 8px 22px rgba(0,0,0,.2);
+  z-index:9999;
+}

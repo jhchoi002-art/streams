@@ -123,7 +123,7 @@ function renderStudents(){
     const s=students[k]||{};
     const done=isDone(k);
     const sc=scoreOfStudent(s);
-    const online=(s.online===true);
+    const online=(Date.now()-(s.lastSeen||0)<9000);
     return `<div class="student-card ${done?'done':'pending'}" data-id="${k}">
       <div>${done?'🟢':'⚪'} ${s.name||k} ${online?'':'<span class="small">(오프라인)</span>'}</div>
       <div class="small">${done?'입력 완료':'미입력'} · ${sc.run}칸 / ${sc.score}점</div>
