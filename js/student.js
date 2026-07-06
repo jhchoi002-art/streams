@@ -1,53 +1,19 @@
 let room=qs("room");
-let sid=localStorage.getItem("streamsSid")||("s"+Math.random().toString(36).slice(2));
-localStorage.setItem("streamsSid",sid);
-
-let clientId=localStorage.getItem("streamsClientId")||("c"+Math.random().toString(36).slice(2));
-localStorage.setItem("streamsClientId",clientId);
-
 let name=localStorage.getItem("streamsName")||"";
+let key="";
 let roomData=null;
 let board=Array(20).fill(null);
 let resetToken="";
 let unsubscribe=null;
 let heartbeatTimer=null;
-
-const ACTIVE_LIMIT_MS=5000;
+const ACTIVE_LIMIT_MS=8000;
 
 $("roomInput").value=room;
 $("nameInput").value=name;
 $("joinBtn").onclick=join;
 
-function cleanName(v){
-  return (v||"").trim();
-}
-
-function now(){
-  return Date.now();
-}
-
-function findSameName(students,targetName){
-  const list=Object.entries(students||{}).filter(([id,s])=>cleanName(s.name)===targetName);
-  if(!list.length)return null;
-
-  // 내 기존 sid면 바로 이어서 하기
-  const mine=list.find(([id])=>id===sid);
-  if(mine)return {kind:"mine",id:mine[0],data:mine[1]};
-
-  // 같은 기기/브라우저에서 만든 기록이면 sid가 달라도 이어서 하기
-  const sameClient=list.find(([id,s])=>s.clientId&&s.clientId===clientId);
-  if(sameClient)return {kind:"mine",id:sameClient[0],data:sameClient[1]};
-
-  // 다른 기기에서 최근 heartbeat가 있으면 접속중으로 판단
-  const active=list.find(([id,s])=>{
-    const last=s.lastSeen||s.updated||s.joined||0;
-    return now()-last<ACTIVE_LIMIT_MS;
-  });
-  if(active)return {kind:"active",id:active[0],data:active[1]};
-
-  // 접속중이 아닌 같은 이름 기록 중 최신 것을 이어서 하기
-  const latest=list.sort((a,b)=>(b[1].updated||0)-(a[1].updated||0))[0];
-  return {kind:"resume",id:latest[0],data:latest[1]};
+function isActive(s){
+  return Date.now()-(s?.lastSeen||0)<ACTIVE_LIMIT_MS;
 }
 
 async function join(){
@@ -59,38 +25,39 @@ async function join(){
     return;
   }
 
+  key=nameKey(name);
   const data=await fbGet("/streamsRooms/"+room);
   if(!data){
     $("joinMsg").textContent="방을 찾을 수 없습니다.";
     return;
   }
 
-  const found=findSameName(data.students||{},name);
+  const existing=(data.students||{})[key];
 
-  if(found&&found.kind==="active"){
-    $("joinMsg").textContent="이미 같은 이름으로 접속 중입니다. 다른 이름을 적어주세요.";
+  // 같은 이름이 접속 중이면 새 접속 차단.
+  // 단, 같은 브라우저가 새로고침/재접속하는 경우는 lastSeen만으로 구분이 어려우므로
+  // 학생이 나갔다가 다시 들어오는 상황을 위해 기존 기록이 있으면 이어서 하기를 우선 허용합니다.
+  // 다른 학생이 같은 이름으로 동시에 들어오면 교사용 목록에서 하나의 이름으로 합쳐지므로 이름 중복 방지 효과가 있습니다.
+  if(existing && isActive(existing) && !confirm("같은 이름의 기록이 이미 있습니다.\n본인이라면 확인을 눌러 이어서 진행하세요.\n다른 학생이라면 취소 후 다른 이름을 적어주세요.")){
+    $("joinMsg").textContent="다른 이름을 적어주세요.";
     return;
-  }
-
-  if(found&&(found.kind==="mine"||found.kind==="resume")){
-    sid=found.id;
-    localStorage.setItem("streamsSid",sid);
-    board=found.data.board||Array(20).fill(null);
-  }else{
-    const old=await fbGet("/streamsRooms/"+room+"/students/"+sid);
-    board=old?.board||Array(20).fill(null);
   }
 
   localStorage.setItem("streamsName",name);
   roomData=data;
   resetToken=String(data.resetToken||"");
 
+  if(existing&&existing.board){
+    board=existing.board;
+  }else{
+    board=Array(20).fill(null);
+  }
+
   await saveStudent(currentCell()!==null?roomData.currentIndex:-999);
 
   $("joinScreen").classList.add("hidden");
   $("gameScreen").classList.remove("hidden");
   history.replaceState(null,"","student.html?room="+room);
-
   listenRoom();
   startHeartbeat();
 }
@@ -99,8 +66,8 @@ function listenRoom(){
   if(unsubscribe)unsubscribe();
   unsubscribe=fbListen("/streamsRooms/"+room,async data=>{
     if(!data)return;
-
     const newToken=String(data.resetToken||"");
+
     if(resetToken&&newToken!==resetToken){
       board=Array(20).fill(null);
       roomData=data;
@@ -112,6 +79,13 @@ function listenRoom(){
 
     resetToken=newToken;
     roomData=data;
+
+    // 서버에 내 기록이 있고, 내 로컬 보드보다 최신인 경우만 동기화
+    const serverMe=data.students?.[key];
+    if(serverMe&&serverMe.board&&serverMe.updated && serverMe.updated>(Number(localStorage.getItem("streamsLastLocalUpdate_"+room+"_"+key)||0)+1000)){
+      board=serverMe.board;
+    }
+
     render();
   });
 }
@@ -119,11 +93,8 @@ function listenRoom(){
 function startHeartbeat(){
   clearInterval(heartbeatTimer);
   heartbeatTimer=setInterval(()=>{
-    if(room&&sid){
-      fbPatch("/streamsRooms/"+room+"/students/"+sid,{
-        lastSeen:now(),
-        clientId
-      });
+    if(room&&key){
+      fbPatch("/streamsRooms/"+room+"/students/"+key,{lastSeen:Date.now(),name});
     }
   },2000);
 }
@@ -170,22 +141,23 @@ async function place(cell){
 }
 
 async function saveStudent(currentPlaced){
-  await fbPatch("/streamsRooms/"+room+"/students/"+sid,{
+  const updated=Date.now();
+  localStorage.setItem("streamsLastLocalUpdate_"+room+"_"+key,String(updated));
+  await fbPatch("/streamsRooms/"+room+"/students/"+key,{
     name,
     board,
     boardSimple:simpleBoard(board),
     currentPlaced,
-    updated:now(),
-    joined:now(),
-    lastSeen:now(),
-    clientId
+    updated,
+    joined:updated,
+    lastSeen:updated
   });
 }
 
 window.addEventListener("beforeunload",()=>{
-  if(room&&sid){
+  if(room&&key){
     try{
-      fetch(DB_URL+"/streamsRooms/"+room+"/students/"+sid+".json",{
+      fetch(DB_URL+"/streamsRooms/"+room+"/students/"+key+".json",{
         method:"PATCH",
         keepalive:true,
         headers:{"Content-Type":"application/json"},

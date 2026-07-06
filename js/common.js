@@ -59,3 +59,13 @@ function scoreBoard(board){
   return {run:totalRun, bestRun, score:totalScore};
 }
 function simpleBoard(board){return (board||Array(20).fill(null)).map(x=>x?x.value:null)}
+
+function cleanName(v){return (v||"").trim();}
+function nameKey(name){
+  const s=cleanName(name);
+  // Firebase path-safe key. Korean names are encoded safely.
+  return encodeURIComponent(s).replace(/\./g,"%2E").replace(/\$/g,"%24").replace(/\#/g,"%23").replace(/\[/g,"%5B").replace(/\]/g,"%5D").replace(/\//g,"%2F");
+}
+function studentArray(students){
+  return Object.keys(students||{}).map(k=>({id:k,...students[k]}));
+}

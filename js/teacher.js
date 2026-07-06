@@ -14,7 +14,8 @@ async function newRoom(){
     currentValue:"-",
     deck:makeDeck().slice(0,20),
     students:{},
-    ended:false
+    ended:false,
+    dataVersion:"3.2-name-based"
   });
   listenRoom();
 }
@@ -25,16 +26,16 @@ async function resetRoom(){
 
   const old=await fbGet("/streamsRooms/"+room);
   const students={};
-  Object.entries(old?.students||{}).forEach(([id,s])=>{
-    students[id]={
-      name:s.name||id,
+  Object.entries(old?.students||{}).forEach(([key,s])=>{
+    students[key]={
+      name:s.name||key,
       board:Array(20).fill(null),
       boardSimple:Array(20).fill(null),
       currentPlaced:-999,
       joined:s.joined||Date.now(),
       updated:Date.now(),
       lastSeen:s.lastSeen||0,
-      clientId:s.clientId||""
+      online:false
     };
   });
 
@@ -45,7 +46,8 @@ async function resetRoom(){
     currentValue:"-",
     deck:makeDeck().slice(0,20),
     students,
-    ended:false
+    ended:false,
+    dataVersion:"3.2-name-based"
   });
   lastDoneMap={};
   await refreshRoom();
@@ -64,24 +66,25 @@ function staticRender(){
   $("displayLink").href="display.html?room="+(room||"");
 }
 
-function getStudentKeys(){
-  return Object.keys(roomData?.students||{});
+function studentsObj(){return roomData?.students||{};}
+function getStudentKeys(){return Object.keys(studentsObj());}
+function currentTurn(){return roomData?.currentIndex??-1;}
+
+function isDone(k){
+  const s=studentsObj()[k];
+  return currentTurn()>=0 && s && s.currentPlaced===currentTurn();
 }
 
 function getDoneKeys(){
-  const students=roomData?.students||{};
-  const current=roomData?.currentIndex??-1;
-  if(current<0)return [];
-  return Object.keys(students).filter(k=>students[k].currentPlaced===current);
+  if(currentTurn()<0)return [];
+  return getStudentKeys().filter(k=>isDone(k));
 }
 
 function getMissingStudents(){
-  const students=roomData?.students||{};
-  const current=roomData?.currentIndex??-1;
-  if(current<0)return [];
-  return Object.keys(students)
-    .filter(k=>students[k].currentPlaced!==current)
-    .map(k=>students[k].name||k)
+  if(currentTurn()<0)return [];
+  return getStudentKeys()
+    .filter(k=>!isDone(k))
+    .map(k=>studentsObj()[k].name||k)
     .sort((a,b)=>a.localeCompare(b,"ko"));
 }
 
@@ -91,7 +94,7 @@ function renderProgress(){
 
   $("turnCount").textContent=`${done.length} / ${keys.length}명`;
   $("turnFill").style.width=keys.length?`${Math.round(done.length/keys.length*100)}%`:"0%";
-  $("turnMsg").style.display=(keys.length>0&&done.length===keys.length&&(roomData?.currentIndex??-1)>=0)?"block":"none";
+  $("turnMsg").style.display=(keys.length>0&&done.length===keys.length&&currentTurn()>=0)?"block":"none";
 
   const count=pickedCount();
   if(count>=20){
@@ -104,42 +107,37 @@ function renderProgress(){
 }
 
 function renderStudents(){
-  const students=roomData?.students||{};
-  const current=roomData?.currentIndex??-1;
+  const students=studentsObj();
   const keys=Object.keys(students).sort((a,b)=>(students[a].name||a).localeCompare(students[b].name||b,"ko"));
 
   $("studentList").innerHTML=keys.length?keys.map(k=>{
     const s=students[k]||{};
-    const done=current>=0&&s.currentPlaced===current;
+    const done=isDone(k);
     const wasDone=lastDoneMap[k]===true;
     const flash=done&&!wasDone?' flash':'';
     const sc=scoreBoard(s.boardSimple||[]);
+    const online=(Date.now()-(s.lastSeen||0)<8000);
     return `<div class="student-card ${done?'done':'pending'}${flash}" data-id="${k}">
-      <div>${done?'🟢':'⚪'} ${s.name||k}</div>
+      <div>${done?'🟢':'⚪'} ${s.name||k} ${online?'':'<span class="small">(오프라인)</span>'}</div>
       <div class="small">${done?'입력 완료':'미입력'} · ${sc.run}칸 / ${sc.score}점</div>
     </div>`;
   }).join(""):"아직 학생 없음";
 
   const nextMap={};
-  keys.forEach(k=>{nextMap[k]=current>=0&&students[k].currentPlaced===current;});
+  keys.forEach(k=>{nextMap[k]=isDone(k);});
   lastDoneMap=nextMap;
 
   document.querySelectorAll(".student-card").forEach(el=>el.onclick=()=>openStudent(el.dataset.id));
 }
 
 function renderRank(){
-  const students=roomData?.students||{};
+  const students=studentsObj();
   const keys=Object.keys(students);
 
   const ranks=keys.map(k=>{
     const s=students[k]||{};
     const sc=scoreBoard(s.boardSimple||[]);
-    return {
-      id:k,
-      name:s.name||k,
-      score:sc.score,
-      run:sc.run
-    };
+    return {id:k,name:s.name||k,score:sc.score,run:sc.run};
   }).sort((a,b)=>b.score-a.score||b.run-a.run||a.name.localeCompare(b.name,"ko"));
 
   $("rankList").innerHTML=ranks.length?ranks.map((r,i)=>`<div class="rank-row">
@@ -157,11 +155,11 @@ function render(){
   renderRank();
 }
 
-function openStudent(id){
-  const s=roomData?.students?.[id];
+function openStudent(key){
+  const s=studentsObj()[key];
   if(!s)return;
   $("modal").classList.remove("hidden");
-  $("modalTitle").textContent=(s.name||id)+" 학생 판";
+  $("modalTitle").textContent=(s.name||key)+" 학생 판";
   renderBoard($("modalBoard"),{
     board:s.boardSimple||Array(20).fill(null),
     name:s.name||"",
@@ -188,7 +186,6 @@ function listenRoom(){
 
   if(!room)return newRoom();
 
-  // SSE + 직접 폴링. 점수 동기화 안정성을 위해 폴링을 0.5초로 둡니다.
   unsubscribe=fbListen("/streamsRooms/"+room,data=>{
     if(data){
       roomData=data;
@@ -205,12 +202,12 @@ $("resetBtn").onclick=resetRoom;
 
 $("drawBtn").onclick=async()=>{
   if(!roomData)return;
-  const ni=(roomData.currentIndex??-1)+1;
+  const ni=currentTurn()+1;
   if(ni>=20)return alert("20개를 모두 뽑았습니다.");
 
   const keys=getStudentKeys();
   const done=getDoneKeys();
-  if((roomData.currentIndex??-1)>=0&&keys.length>0&&done.length<keys.length){
+  if(currentTurn()>=0&&keys.length>0&&done.length<keys.length){
     const missing=getMissingStudents();
     const preview=missing.slice(0,12).map(n=>"• "+n).join("\n");
     const more=missing.length>12?`\n외 ${missing.length-12}명`:"";
@@ -226,6 +223,7 @@ $("endBtn").onclick=async()=>{
   await fbPatch("/streamsRooms/"+room,{ended:true});
   await refreshRoom();
 };
+
 $("closeModal").onclick=()=>$("modal").classList.add("hidden");
 $("modal").onclick=e=>{if(e.target.id==="modal")$("modal").classList.add("hidden")};
 
