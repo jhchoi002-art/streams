@@ -39,7 +39,7 @@ a{text-decoration:none;color:inherit}
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:1000}.modal-bg.show{display:flex}.modal{background:white;border-radius:16px;width:min(1120px,95vw);max-height:94vh;overflow:auto;padding:20px;position:relative}.close-red{position:absolute;right:14px;top:12px;width:54px;height:54px;border-radius:50%;border:0;background:#e03333;color:#fff;font-size:30px;font-weight:900;cursor:pointer;z-index:5}.modal-title{text-align:center;font-size:28px;font-weight:900;margin-bottom:8px;color:var(--navy)}.nav-stu{display:flex;justify-content:center;gap:10px;margin:8px 0}.preview-scale{transform:scale(.66);transform-origin:top center;height:500px}.preview-scale .topbar,.preview-scale .footer{display:none}.preview-scale .board-stage{padding:0;background:white}.preview-scale .board{margin:0 auto}
 .display-body{background:#0b1730;color:white;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}.display-num{font-size:180px;font-weight:900;color:#ffd91a}.display-code{font-size:60px;font-weight:900}.display-sub{font-size:30px;margin-top:20px}
 
-/* ===== STREAMS ONLINE 2.0 EFFECTS ===== */
+/* ===== STREAMS ONLINE 3.0 EFFECTS ===== */
 @keyframes numberPulse{0%{transform:scale(1)}45%{transform:scale(1.28)}100%{transform:scale(1)}}
 @keyframes cellPop{0%{transform:scale(.86)}65%{transform:scale(1.14)}100%{transform:scale(1)}}
 @keyframes softBlink{0%,100%{filter:brightness(1)}50%{filter:brightness(1.25)}}
@@ -122,7 +122,8 @@ let board=Array(20).fill(null);
 let joined=!!(room&&name);
 let pollTimer=null;
 let saveTimer=null;
-let isRendering=false;
+let lastResetToken=localStorage.getItem('streamsResetToken_'+room)||'';
+let lastRoomSignature='';
 
 function nameScreen(msg=''){
   clearInterval(pollTimer);
@@ -140,46 +141,37 @@ async function join(){
   if(!r){nameScreen('방을 찾을 수 없습니다. 교사용 화면의 방코드를 확인하세요.');return;}
 
   localStorage.setItem('streamsName',name);
+  state=r;
+  lastResetToken=String(r.resetToken||'');
+  localStorage.setItem('streamsResetToken_'+room,lastResetToken);
 
   const old=await get('/streamsRooms/'+room+'/students/'+sid);
-  if(old&&old.board) board=old.board;
+  board=(old&&old.board)||Array(20).fill(null);
 
-  await patch('/streamsRooms/'+room+'/students/'+sid,{
-    name,
-    board,
-    boardSimple:simpleBoard(),
-    currentPlaced:-999,
-    joined:Date.now()
-  });
-
+  await saveStudent(-999);
   joined=true;
   history.replaceState(null,'','student.html?room='+room);
-  state=r;
   render();
   startPolling();
 }
 
 async function init(){
   if(!room||!name){nameScreen();return;}
-
   const r=await get('/streamsRooms/'+room);
   if(!r){nameScreen('방을 찾을 수 없습니다.');return;}
 
   state=r;
-
-  const old=await get('/streamsRooms/'+room+'/students/'+sid);
-  if(old&&old.board){
-    board=old.board;
+  const token=String(r.resetToken||'');
+  if(lastResetToken && token && token!==lastResetToken){
+    board=Array(20).fill(null);
   }else{
-    await patch('/streamsRooms/'+room+'/students/'+sid,{
-      name,
-      board,
-      boardSimple:simpleBoard(),
-      currentPlaced:-999,
-      joined:Date.now()
-    });
+    const old=await get('/streamsRooms/'+room+'/students/'+sid);
+    if(old&&old.board) board=old.board;
   }
+  lastResetToken=token;
+  localStorage.setItem('streamsResetToken_'+room,token);
 
+  await saveStudent(currentDrawObj()?state.currentIndex:-999);
   joined=true;
   render();
   startPolling();
@@ -187,7 +179,7 @@ async function init(){
 
 function startPolling(){
   clearInterval(pollTimer);
-  pollTimer=setInterval(pollRoom,800);
+  pollTimer=setInterval(pollRoom,650);
 }
 
 async function pollRoom(){
@@ -195,15 +187,27 @@ async function pollRoom(){
   const r=await get('/streamsRooms/'+room);
   if(!r)return;
 
-  // 항상 최신 현재 숫자/회차를 반영
-  const changed = !state || r.currentIndex!==state.currentIndex || r.currentValue!==state.currentValue;
+  const token=String(r.resetToken||'');
+  const resetChanged=token && token!==lastResetToken;
   state=r;
-  if(changed) render();
+
+  if(resetChanged){
+    board=Array(20).fill(null);
+    lastResetToken=token;
+    localStorage.setItem('streamsResetToken_'+room,token);
+    await saveStudent(-999);
+    render();
+    return;
+  }
+
+  const sig=`${state.currentIndex}|${state.currentValue}|${state.ended}`;
+  if(sig!==lastRoomSignature){
+    lastRoomSignature=sig;
+    render();
+  }
 }
 
-function simpleBoard(){
-  return board.map(x=>x?x.value:null);
-}
+function simpleBoard(){ return board.map(x=>x?x.value:null); }
 
 function currentDrawObj(){
   if(!state)return null;
@@ -216,14 +220,11 @@ function currentDrawObj(){
 }
 
 function render(){
-  if(!state||isRendering)return;
-  isRendering=true;
-
+  if(!state)return;
   const cd=currentDrawObj();
   const status=state.currentIndex>=0
     ? '현재 숫자를 빈칸에 놓으세요. 다음 숫자가 나오기 전까지 이동할 수 있습니다.'
     : '다음 숫자를 기다리는 중입니다.';
-
   renderBoard(app,{
     board:simpleBoard(),
     currentDraw:cd,
@@ -233,10 +234,10 @@ function render(){
     interactive:true,
     status,
     onCell:place,
-    onDone:saveNow
+    onDone:()=>{}
   });
-
-  isRendering=false;
+  document.querySelectorAll('.cell').forEach((el,i)=>{ if(simpleBoard()[i]) el.classList.add('filled'); });
+  if(state.ended && typeof showFinalIfEnded==='function') showFinalIfEnded();
 }
 
 function place(cell){
@@ -245,27 +246,25 @@ function place(cell){
   const idx=state.currentIndex;
   const val=state.currentValue;
 
-  // 다른 턴에 이미 놓인 칸에는 넣을 수 없음
   if(board[cell] && board[cell].drawIndex !== idx){
-    shakeCell(cell);
-    toast('이미 이전 숫자가 놓인 칸입니다.');
+    if(typeof shakeCell==='function') shakeCell(cell);
+    if(typeof toast==='function') toast('이미 이전 숫자가 놓인 칸입니다.');
+    else alert('이미 이전 숫자가 놓인 칸입니다.');
     return;
   }
 
-  // 같은 턴에 놓은 숫자는 다른 빈 칸으로 이동 가능
-  board = board.map(x => x && x.drawIndex === idx ? null : x);
-  board[cell] = {drawIndex:idx, value:val};
+  board=board.map(x=>x&&x.drawIndex===idx?null:x);
+  board[cell]={drawIndex:idx,value:val};
 
   render();
-  markJustPlaced(cell);
+  if(typeof markJustPlaced==='function') markJustPlaced(cell);
+
   clearTimeout(saveTimer);
-  saveTimer=setTimeout(saveNow,80);
+  saveTimer=setTimeout(()=>saveStudent(idx),80);
 }
 
-async function saveNow(){
-  if(!room||!sid||!state)return;
-  const cd=currentDrawObj();
-  const currentPlaced=cd?state.currentIndex:-999;
+async function saveStudent(currentPlaced){
+  if(!room||!sid)return;
   await patch('/streamsRooms/'+room+'/students/'+sid,{
     name,
     board,

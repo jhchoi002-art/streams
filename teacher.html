@@ -39,7 +39,7 @@ a{text-decoration:none;color:inherit}
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:1000}.modal-bg.show{display:flex}.modal{background:white;border-radius:16px;width:min(1120px,95vw);max-height:94vh;overflow:auto;padding:20px;position:relative}.close-red{position:absolute;right:14px;top:12px;width:54px;height:54px;border-radius:50%;border:0;background:#e03333;color:#fff;font-size:30px;font-weight:900;cursor:pointer;z-index:5}.modal-title{text-align:center;font-size:28px;font-weight:900;margin-bottom:8px;color:var(--navy)}.nav-stu{display:flex;justify-content:center;gap:10px;margin:8px 0}.preview-scale{transform:scale(.66);transform-origin:top center;height:500px}.preview-scale .topbar,.preview-scale .footer{display:none}.preview-scale .board-stage{padding:0;background:white}.preview-scale .board{margin:0 auto}
 .display-body{background:#0b1730;color:white;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}.display-num{font-size:180px;font-weight:900;color:#ffd91a}.display-code{font-size:60px;font-weight:900}.display-sub{font-size:30px;margin-top:20px}
 
-/* ===== STREAMS ONLINE 2.0 EFFECTS ===== */
+/* ===== STREAMS ONLINE 3.0 EFFECTS ===== */
 @keyframes numberPulse{0%{transform:scale(1)}45%{transform:scale(1.28)}100%{transform:scale(1)}}
 @keyframes cellPop{0%{transform:scale(.86)}65%{transform:scale(1.14)}100%{transform:scale(1)}}
 @keyframes softBlink{0%,100%{filter:brightness(1)}50%{filter:brightness(1.25)}}
@@ -124,53 +124,71 @@ function renderBoard(container,opt={}){
 </script>
 <script>
 let room=localStorage.getItem('streamsTeacherRoom')||'';
-let state=null;
+let roomMeta=null;
+let studentsObj={};
 let selectedId=null;
 let studentKeys=[];
 let teacherTimer=null;
+let lastStudentsSignature='';
+let lastRankSignature='';
+let lastProgressSignature='';
+
+function emptyStudentsFrom(oldStudents){
+  const cleared={};
+  Object.keys(oldStudents||{}).forEach(k=>{
+    cleared[k]={
+      name:oldStudents[k].name||k,
+      board:Array(20).fill(null),
+      boardSimple:Array(20).fill(null),
+      currentPlaced:-999,
+      joined:oldStudents[k].joined||Date.now(),
+      updated:Date.now()
+    };
+  });
+  return cleared;
+}
 
 async function createRoom(){
   room=makeCode();
   localStorage.setItem('streamsTeacherRoom',room);
   await put('/streamsRooms/'+room,{
     created:Date.now(),
+    resetToken:Date.now(),
     currentIndex:-1,
     currentValue:'-',
     deck:makeDeck().slice(0,20),
     students:{},
     ended:false
   });
+  selectedId=null;
+  lastStudentsSignature='';
+  lastRankSignature='';
+  lastProgressSignature='';
   renderStatic();
-  await load();
+  await loadAll(true);
 }
 
 async function resetSameRoom(){
   if(!room){ await createRoom(); return; }
-  if(!confirm('현재 방코드는 유지하고 게임만 초기화할까요?\n학생들은 같은 QR로 계속 접속할 수 있습니다.')) return;
+  if(!confirm('현재 방코드는 유지하고 게임만 초기화할까요?
+학생들은 같은 QR로 계속 접속할 수 있습니다.')) return;
 
   const old = await get('/streamsRooms/'+room);
-  const students = old?.students || {};
-  const cleared = {};
-  Object.keys(students).forEach(k=>{
-    cleared[k] = {
-      name: students[k].name || k,
-      board: Array(20).fill(null),
-      boardSimple: Array(20).fill(null),
-      currentPlaced: -999,
-      joined: students[k].joined || Date.now(),
-      updated: Date.now()
-    };
-  });
-
+  const cleared = emptyStudentsFrom(old?.students||{});
   await put('/streamsRooms/'+room,{
     created:Date.now(),
+    resetToken:Date.now(),
     currentIndex:-1,
     currentValue:'-',
     deck:makeDeck().slice(0,20),
     students:cleared,
     ended:false
   });
-  await load();
+  selectedId=null;
+  lastStudentsSignature='';
+  lastRankSignature='';
+  lastProgressSignature='';
+  await loadAll(true);
 }
 
 function renderStatic(){
@@ -182,99 +200,130 @@ function renderStatic(){
   displayLink.href='display.html?room='+(room||'');
 }
 
-function renderProgress(studentsObj){
-  const currentTurn = state?.currentIndex ?? -1;
-  studentKeys = Object.keys(studentsObj || {});
-  const total = studentKeys.length;
-  const doneCount = currentTurn >= 0
-    ? studentKeys.filter(k => studentsObj[k]?.currentPlaced === currentTurn).length
-    : 0;
+async function loadAll(force=false){
+  if(!room){ await createRoom(); return; }
+
+  const full = await get('/streamsRooms/'+room);
+  if(!full){ await createRoom(); return; }
+
+  roomMeta={
+    currentIndex: full.currentIndex ?? -1,
+    currentValue: full.currentValue || '-',
+    deck: full.deck || [],
+    ended: !!full.ended,
+    resetToken: full.resetToken || 0
+  };
+  studentsObj=full.students || {};
+  curTop.textContent=roomMeta.currentValue;
+  renderStatic();
+  renderProgress(force);
+  renderStudents(force);
+  renderRank(force);
+  renderSelected(force);
+}
+
+function progressSignature(){
+  const currentTurn=roomMeta?.currentIndex ?? -1;
+  const keys=Object.keys(studentsObj||{});
+  const done=keys.filter(k=>studentsObj[k]?.currentPlaced===currentTurn && currentTurn>=0).length;
+  return `${currentTurn}|${done}|${keys.length}`;
+}
+
+function renderProgress(force=false){
+  const sig=progressSignature();
+  if(!force && sig===lastProgressSignature) return;
+  lastProgressSignature=sig;
+
+  const currentTurn=roomMeta?.currentIndex ?? -1;
+  studentKeys=Object.keys(studentsObj||{});
+  const total=studentKeys.length;
+  const doneCount=currentTurn>=0 ? studentKeys.filter(k=>studentsObj[k]?.currentPlaced===currentTurn).length : 0;
 
   if(document.getElementById('turnCount')){
-    turnCount.textContent = `${doneCount} / ${total}명`;
-    turnFill.style.width = total ? `${Math.round(doneCount/total*100)}%` : '0%';
-    turnMsg.style.display = (total>0 && doneCount===total && currentTurn>=0) ? 'block' : 'none';
+    turnCount.textContent=`${doneCount} / ${total}명`;
+    turnFill.style.width=total?`${Math.round(doneCount/total*100)}%`:'0%';
+    turnMsg.style.display=(total>0 && doneCount===total && currentTurn>=0)?'block':'none';
   }
-
   if(document.getElementById('draw')){
-    draw.textContent = total>0 ? `다음 숫자 뽑기 (${doneCount}/${total})` : '다음 숫자 뽑기';
+    draw.textContent=total>0?`다음 숫자 뽑기 (${doneCount}/${total})`:'다음 숫자 뽑기';
   }
 }
 
-function renderStudents(studentsObj){
-  const studentsData = studentsObj || {};
-  const currentTurn = state?.currentIndex ?? -1;
-  studentKeys = Object.keys(studentsData);
+function studentsSignature(){
+  const currentTurn=roomMeta?.currentIndex ?? -1;
+  return Object.keys(studentsObj||{}).sort().map(k=>{
+    const s=studentsObj[k]||{};
+    const sc=scoreBoard(s.boardSimple||[]);
+    return `${k}:${s.name}:${s.currentPlaced===currentTurn}:${sc.run}:${sc.score}:${s.updated||0}`;
+  }).join('|');
+}
+
+function renderStudents(force=false){
+  const sig=studentsSignature();
+  if(!force && sig===lastStudentsSignature) return;
+  lastStudentsSignature=sig;
+
+  const currentTurn=roomMeta?.currentIndex ?? -1;
+  studentKeys=Object.keys(studentsObj||{}).sort((a,b)=>(studentsObj[a].name||a).localeCompare(studentsObj[b].name||b,'ko'));
 
   if(!studentKeys.length){
-    students.innerHTML = '아직 학생 없음';
+    students.innerHTML='아직 학생 없음';
     return;
   }
 
-  students.innerHTML = studentKeys.map(k=>{
-    const s = studentsData[k];
-    const done = currentTurn >= 0 && s.currentPlaced === currentTurn;
-    const sc = scoreBoard(s.boardSimple || []);
+  students.innerHTML=studentKeys.map(k=>{
+    const s=studentsObj[k]||{};
+    const done=currentTurn>=0 && s.currentPlaced===currentTurn;
+    const sc=scoreBoard(s.boardSimple||[]);
     return `<div class="student-item ${done?'done':'pending'}" data-id="${k}">
       <div>${done?'🟢':'⚪'} ${s.name||k}</div>
       <div class="small">${done?'입력 완료':'미입력'} · ${sc.run}칸 / ${sc.score}점</div>
     </div>`;
   }).join('');
-
   document.querySelectorAll('.student-item').forEach(el=>el.onclick=()=>openStudent(el.dataset.id));
 }
 
-function renderRank(studentsObj){
-  const studentsData = studentsObj || {};
-  const ranks = Object.keys(studentsData).map(k=>{
-    const s = studentsData[k];
-    const sc = scoreBoard(s.boardSimple || []);
-    return {name:s.name||k, score:sc.score, run:sc.run};
-  }).sort((a,b)=>b.score-a.score||b.run-a.run);
+function rankSignature(){
+  return Object.keys(studentsObj||{}).sort().map(k=>{
+    const s=studentsObj[k]||{};
+    const sc=scoreBoard(s.boardSimple||[]);
+    return `${k}:${s.name}:${sc.run}:${sc.score}`;
+  }).join('|');
+}
 
-  rank.innerHTML = ranks.map((r,i)=>{
+function renderRank(force=false){
+  const sig=rankSignature();
+  if(!force && sig===lastRankSignature) return;
+  lastRankSignature=sig;
+
+  const ranks=Object.keys(studentsObj||{}).map(k=>{
+    const s=studentsObj[k]||{};
+    const sc=scoreBoard(s.boardSimple||[]);
+    return {name:s.name||k,score:sc.score,run:sc.run};
+  }).sort((a,b)=>b.score-a.score||b.run-a.run||a.name.localeCompare(b.name,'ko'));
+
+  rank.innerHTML=ranks.map((r,i)=>{
     const medal=i===0?'🥇 ':i===1?'🥈 ':i===2?'🥉 ':'';
     return `<div class="rank-row"><span>${medal}${i+1}. ${r.name}</span><span>${r.run}칸 / ${r.score}점</span></div>`;
   }).join('');
 }
 
-async function load(){
-  if(!room){ await createRoom(); return; }
-
-  const newState = await get('/streamsRooms/'+room);
-  if(!newState){ await createRoom(); return; }
-
-  state = newState;
-  renderStatic();
-  curTop.textContent = state.currentValue || '-';
-
-  const studentsObj = state.students || {};
-  renderProgress(studentsObj);
-  renderStudents(studentsObj);
-  renderRank(studentsObj);
-
-  if(selectedId) {
-    const s = studentsObj[selectedId];
-    if(s){
-      const sc=scoreBoard(s.boardSimple||[]);
-      selected.innerHTML=`<b>${s.name}</b> : ${sc.run}칸 / ${sc.score}점`;
-      if(modalBg.classList.contains('show')){
-        modalTitle.textContent=(s.name||selectedId)+' 학생 판';
-        renderBoard(modalBoard,{board:s.boardSimple||Array(20).fill(null),name:s.name||'',roomCode:room,currentValue:state.currentValue||'-'});
-      }
-    }
+function renderSelected(force=false){
+  if(!selectedId) return;
+  const s=(studentsObj||{})[selectedId];
+  if(!s) return;
+  const sc=scoreBoard(s.boardSimple||[]);
+  selected.innerHTML=`<b>${s.name}</b> : ${sc.run}칸 / ${sc.score}점`;
+  if(force || modalBg.classList.contains('show')){
+    modalTitle.textContent=(s.name||selectedId)+' 학생 판';
+    renderBoard(modalBoard,{board:s.boardSimple||Array(20).fill(null),name:s.name||'',roomCode:room,currentValue:roomMeta.currentValue||'-'});
   }
 }
 
 function openStudent(id){
   selectedId=id;
-  const s=(state.students||{})[id];
-  if(!s)return;
-  const sc=scoreBoard(s.boardSimple||[]);
-  selected.innerHTML=`<b>${s.name}</b> : ${sc.run}칸 / ${sc.score}점`;
-  modalTitle.textContent=(s.name||id)+' 학생 판';
   modalBg.classList.add('show');
-  renderBoard(modalBoard,{board:s.boardSimple||Array(20).fill(null),name:s.name||'',roomCode:room,currentValue:state.currentValue||'-'});
+  renderSelected(true);
 }
 
 function closeModal(){ modalBg.classList.remove('show'); }
@@ -284,16 +333,17 @@ modalBg.onclick=e=>{if(e.target.id==='modalBg')closeModal();};
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 
 prevStu.onclick=()=>{
-  let i=studentKeys.indexOf(selectedId);
+  const i=studentKeys.indexOf(selectedId);
   if(i>0)openStudent(studentKeys[i-1]);
 };
 nextStu.onclick=()=>{
-  let i=studentKeys.indexOf(selectedId);
-  if(i>=0&&i<studentKeys.length-1)openStudent(studentKeys[i+1]);
+  const i=studentKeys.indexOf(selectedId);
+  if(i>=0 && i<studentKeys.length-1)openStudent(studentKeys[i+1]);
 };
 
 function confirmNewRoom(){
-  if(confirm('정말 새 방을 만드시겠습니까?\n현재 게임은 종료되고 새 방코드가 만들어집니다.')){
+  if(confirm('정말 새 방을 만드시겠습니까?
+현재 게임은 종료되고 새 방코드가 만들어집니다.')){
     createRoom();
   }
 }
@@ -302,27 +352,26 @@ if(document.getElementById('newRoomTop')) newRoomTop.onclick=confirmNewRoom;
 if(document.getElementById('newRoom')) newRoom.onclick=confirmNewRoom;
 
 draw.onclick=async()=>{
-  if(!state)return;
-  const ni=(state.currentIndex??-1)+1;
+  if(!roomMeta)return;
+  const ni=(roomMeta.currentIndex??-1)+1;
   if(ni>=20){alert('20개를 모두 뽑았습니다.');return;}
   draw.disabled=true;
-  const oldText=draw.textContent;
   draw.textContent='뽑는 중...';
-  await patch('/streamsRooms/'+room,{currentIndex:ni,currentValue:state.deck[ni]});
+  await patch('/streamsRooms/'+room,{currentIndex:ni,currentValue:roomMeta.deck[ni]});
   draw.disabled=false;
-  await load();
+  await loadAll(true);
 };
 
 end.onclick=async()=>{
   await patch('/streamsRooms/'+room,{ended:true});
-  await load();
+  await loadAll(true);
 };
 
 reset.onclick=resetSameRoom;
 
 renderStatic();
-load();
+loadAll(true);
 clearInterval(teacherTimer);
-teacherTimer=setInterval(load,350);
+teacherTimer=setInterval(()=>loadAll(false),350);
 </script>
 </body></html>
