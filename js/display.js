@@ -5,31 +5,47 @@ $("displayRoom").textContent=room||"-";
 function rankedStudents(){
   const students=displayData?.students||{};
   return Object.keys(students).map(k=>{
-    const s=students[k], sc=scoreBoard(s.boardSimple||[]);
-    return {id:k,name:s.name||k,board:s.boardSimple||Array(20).fill(null),currentPlaced:s.currentPlaced,score:sc.score,run:sc.run};
+    const s=students[k];
+    const sc=scoreBoard(s.boardSimple||[]);
+    return {
+      id:k,
+      name:s.name||k,
+      board:s.boardSimple||Array(20).fill(null),
+      currentPlaced:s.currentPlaced,
+      score:sc.score,
+      run:sc.run,
+      updated:s.updated||0
+    };
   }).sort((a,b)=>b.score-a.score||b.run-a.run||a.name.localeCompare(b.name,"ko"));
 }
 
 function renderDisplay(){
   if(!displayData)return;
-  $("displayNumber").textContent=displayData.currentValue||"-";
-  const students=displayData.students||{};
-  $("displayStudents").textContent="참여 학생 "+Object.keys(students).length+"명";
 
-  const current=displayData.currentIndex??-1;
+  const current = displayData.currentIndex ?? -1;
+  const picked = Math.max(0, current + 1);
+  $("displayNumber").textContent=displayData.currentValue||"-";
+
+  const students=displayData.students||{};
+  const total=Object.keys(students).length;
+  const done=current>=0 ? Object.keys(students).filter(k=>students[k].currentPlaced===current).length : 0;
+  $("displayStudents").textContent=`참여 학생 ${total}명 · 이번 턴 입력 ${done}/${total}명 · ${picked}/20`;
+
   const ranks=rankedStudents();
   $("displayRank").innerHTML=ranks.length?ranks.map((r,i)=>{
-    const done=current>=0&&r.currentPlaced===current;
+    const doneNow=current>=0&&r.currentPlaced===current;
     return `<div class="display-rank-row" data-id="${r.id}">
-      <span>${i===0?'🥇 ':i===1?'🥈 ':i===2?'🥉 ':''}${i+1}. ${r.name} <span class="state">${done?'🟢':'⚪'}</span></span>
+      <span>${i===0?'🥇 ':i===1?'🥈 ':i===2?'🥉 ':''}${i+1}. ${r.name} <span class="state">${doneNow?'🟢':'⚪'}</span></span>
       <span>${r.run}칸 / ${r.score}점</span>
     </div>`;
   }).join(""):"<div class='display-sub'>아직 학생 없음</div>";
+
   document.querySelectorAll(".display-rank-row").forEach(el=>el.onclick=()=>openDisplayBoard(el.dataset.id));
 }
 
 function openDisplayBoard(id){
-  const s=(displayData.students||{})[id]; if(!s)return;
+  const s=(displayData.students||{})[id]; 
+  if(!s)return;
   $("displayModal").classList.add("show");
   $("displayModalTitle").textContent=(s.name||id)+" 학생 보드";
   $("displayModalContent").innerHTML=`<div class="display-board-scale" id="singleBoard"></div>`;
