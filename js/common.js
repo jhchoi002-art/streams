@@ -9,36 +9,53 @@ function scoreBoard(board){
   let totalRun=0;
   let bestRun=0;
 
-  function isAscending(seq){
-    let last=-Infinity;
-    for(const v of seq){
-      if(v==="★") continue;
-      const n=Number(v);
-      if(Number.isNaN(n)) continue;
-      if(n<last) return false;
+  function val(v){
+    if(v==="★") return null;
+    const n=Number(v);
+    return Number.isNaN(n) ? null : n;
+  }
+
+  function addRun(len){
+    if(len<=0) return;
+    totalRun += len;
+    bestRun = Math.max(bestRun, len);
+    totalScore += SCORE_MAP[len] ?? 0;
+  }
+
+  let runLen=0;
+  let last=-Infinity;
+
+  for(let i=0;i<arr.length;i++){
+    const v=arr[i];
+
+    // 빈칸이면 현재 오름차순 묶음 종료
+    if(v===null){
+      addRun(runLen);
+      runLen=0;
+      last=-Infinity;
+      continue;
+    }
+
+    // 조커는 현재 묶음에 포함
+    if(v==="★"){
+      runLen++;
+      continue;
+    }
+
+    const n=val(v);
+
+    // 감소하면 이전 묶음을 점수화하고 새 묶음 시작
+    if(runLen>0 && n<last){
+      addRun(runLen);
+      runLen=1;
+      last=n;
+    }else{
+      runLen++;
       last=n;
     }
-    return true;
   }
 
-  let i=0;
-  while(i<arr.length){
-    if(arr[i]===null){ i++; continue; }
-
-    const seq=[];
-    while(i<arr.length && arr[i]!==null){
-      seq.push(arr[i]);
-      i++;
-    }
-
-    if(isAscending(seq)){
-      const len=seq.length;
-      totalRun += len;
-      bestRun = Math.max(bestRun,len);
-      totalScore += SCORE_MAP[len] ?? 0;
-    }
-  }
-
+  addRun(runLen);
   return {run:totalRun, bestRun, score:totalScore};
 }
 function simpleBoard(board){return (board||Array(20).fill(null)).map(x=>x?x.value:null)}
