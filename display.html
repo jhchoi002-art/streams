@@ -38,7 +38,7 @@ a{text-decoration:none;color:inherit}
 .student-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}.student-item{border:2px solid #c9d7ea;border-radius:10px;padding:10px;cursor:pointer;background:#f8fbff;font-weight:900}.student-item.done{border-color:var(--green);background:#effff6}.student-item .small{font-size:13px;color:#345}.rank-row{display:flex;justify-content:space-between;border-bottom:1px solid #e4e9f1;padding:8px 0;font-weight:900}
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:1000}.modal-bg.show{display:flex}.modal{background:white;border-radius:16px;width:min(1120px,95vw);max-height:94vh;overflow:auto;padding:20px;position:relative}.close-red{position:absolute;right:14px;top:12px;width:54px;height:54px;border-radius:50%;border:0;background:#e03333;color:#fff;font-size:30px;font-weight:900;cursor:pointer;z-index:5}.modal-title{text-align:center;font-size:28px;font-weight:900;margin-bottom:8px;color:var(--navy)}.nav-stu{display:flex;justify-content:center;gap:10px;margin:8px 0}.preview-scale{transform:scale(.66);transform-origin:top center;height:500px}.preview-scale .topbar,.preview-scale .footer{display:none}.preview-scale .board-stage{padding:0;background:white}.preview-scale .board{margin:0 auto}
 .display-body{background:#0b1730;color:white;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}.display-num{font-size:180px;font-weight:900;color:#ffd91a}.display-code{font-size:60px;font-weight:900}.display-sub{font-size:30px;margin-top:20px}
-</style></head><body><div id="app"></div><script>
+</style></head><body class='display-body'><div class="display-code">방코드 <span id="code">-</span></div><div class="display-num" id="num">-</div><div class="display-sub" id="sub">다음 숫자를 기다리는 중입니다.</div><script>
 const DB="https://minority-stock-game-default-rtdb.asia-southeast1.firebasedatabase.app";
 const $=(id)=>document.getElementById(id);
 const qs=new URLSearchParams(location.search);
@@ -66,114 +66,6 @@ function renderBoard(container,opt={}){
   function fit(){const b=container.querySelector('.board');if(!b)return;const scale=Math.min(1.02,(window.innerWidth-20)/1180,(window.innerHeight-150)/620);b.style.transform=`scale(${scale})`;}fit();window.addEventListener('resize',fit);
   if(opt.interactive){container.querySelectorAll('.cell').forEach(el=>el.onclick=()=>opt.onCell&&opt.onCell(Number(el.dataset.idx)));const b=container.querySelector('#doneBtn');if(b)b.onclick=()=>opt.onDone&&opt.onDone();}else{const b=container.querySelector('#doneBtn');if(b)b.style.display='none';}
 }
-</script>
-<script>
-let room=roomParam,sid=localStorage.getItem('streamsSid')||('s'+Math.random().toString(36).slice(2));localStorage.setItem('streamsSid',sid);
-let name=localStorage.getItem('streamsName')||'',state=null,me=null,board=Array(20).fill(null),joined=!!(room&&name);
-
-// 렉 방지 + 다음 숫자 즉시 반영용 상태
-let localEditing=false;
-let lastLocalEdit=0;
-let saveTimer=null;
-let saving=false;
-let lastSeenIndex=null;
-
-function nameScreen(msg=''){
-  app.innerHTML=`<div class="name-screen"><div class="name-box"><h1>스트림스 입장</h1>${msg?`<p style="color:#c00;font-weight:900">${msg}</p>`:''}<input id="roomInput" placeholder="방코드" value="${room||''}"><input id="nameInput" placeholder="이름" value="${name||''}" autofocus><button class="btn green" id="joinBtn">입장하기</button></div></div>`;
-  joinBtn.onclick=join;
-}
-async function join(){
-  room=roomInput.value.trim().toUpperCase();
-  name=nameInput.value.trim();
-  if(!room||!name){alert('방코드와 이름을 입력하세요.');return;}
-  const r=await get('/streamsRooms/'+room);
-  if(!r){nameScreen('방을 찾을 수 없습니다. 교사용 화면의 방코드를 확인하세요.');return;}
-  localStorage.setItem('streamsName',name);
-  const old=await get('/streamsRooms/'+room+'/students/'+sid);
-  board=(old&&old.board)||Array(20).fill(null);
-  await patch('/streamsRooms/'+room+'/students/'+sid,{name,board,boardSimple:board.map(x=>x?x.value:null),currentPlaced:old?.currentPlaced??-999,joined:Date.now()});
-  joined=true;
-  history.replaceState(null,'','student.html?room='+room);
-  await load(true);
-}
-async function load(force=false){
-  if(!room||!name){if(!joined)nameScreen();return;}
-
-  const newState=await get('/streamsRooms/'+room);
-  if(!newState){nameScreen('방을 찾을 수 없습니다.');joined=false;return;}
-
-  const newIndex=newState.currentIndex;
-  const indexChanged = lastSeenIndex !== null && newIndex !== lastSeenIndex;
-
-  // 교사가 다음 숫자를 뽑은 경우에는 localEditing을 강제로 풀어서 새 숫자가 바로 보이게 함
-  if(indexChanged){
-    localEditing=false;
-    saving=false;
-    clearTimeout(saveTimer);
-  }
-
-  state=newState;
-  lastSeenIndex=newIndex;
-
-  // 방금 칸을 누른 직후에는 내 보드를 덮어쓰지 않되, 상단 현재 숫자는 render로 즉시 갱신
-  if(localEditing && !force && Date.now()-lastLocalEdit < 650){
-    render();
-    return;
-  }
-
-  me=await get('/streamsRooms/'+room+'/students/'+sid);
-  if(!me){
-    await patch('/streamsRooms/'+room+'/students/'+sid,{name,board,boardSimple:board.map(x=>x?x.value:null),currentPlaced:-999,joined:Date.now()});
-    me={name,board,currentPlaced:-999};
-  }
-
-  if(!saving && !localEditing){
-    board=me.board||Array(20).fill(null);
-  }
-  render();
-}
-function currentDrawObj(){
-  const idx=state.currentIndex;
-  if(idx==null||idx<0)return null;
-  for(let i=0;i<20;i++){
-    if(board[i]&&board[i].drawIndex===idx)return{cell:i,value:board[i].value};
-  }
-  return null;
-}
-function simpleBoard(){return board.map(x=>x?x.value:null);}
-function render(){
-  const cd=currentDrawObj();
-  const status=state.currentIndex>=0?'현재 숫자를 놓을 칸을 선택하세요. 다음 숫자가 나오기 전까지 위치를 바꿀 수 있습니다.':'다음 숫자를 기다리는 중입니다.';
-  renderBoard(app,{board:simpleBoard(),currentDraw:cd,name,roomCode:room,currentValue:state.currentValue||'-',interactive:true,status,onCell:place,onDone:saveNow});
-}
-function place(cell){
-  if(!state||state.currentIndex==null||state.currentIndex<0)return;
-
-  const idx=state.currentIndex, val=state.currentValue;
-  board=board.map(x=>x&&x.drawIndex===idx?null:x);
-  board[cell]={drawIndex:idx,value:val};
-
-  localEditing=true;
-  lastLocalEdit=Date.now();
-  render();
-
-  clearTimeout(saveTimer);
-  saveTimer=setTimeout(saveNow,150);
-}
-async function saveNow(){
-  if(!room||!sid||!state)return;
-  clearTimeout(saveTimer);
-  saving=true;
-  const cd=currentDrawObj();
-  const currentPlaced=cd?state.currentIndex:-999;
-  try{
-    await patch('/streamsRooms/'+room+'/students/'+sid,{name,board,boardSimple:simpleBoard(),currentPlaced,updated:Date.now()});
-  }finally{
-    saving=false;
-    setTimeout(()=>{localEditing=false;},180);
-  }
-}
-if(joined)load(true);else nameScreen();
-setInterval(()=>{if(joined)load(false);},800);
-</script>
-</body></html>
+</script><script>
+let room=roomParam;async function load(){const s=await get('/streamsRooms/'+room);if(!s)return;code.textContent=room;num.textContent=s.currentValue||'-';sub.textContent=`참여 학생 ${Object.keys(s.students||{}).length}명`;}load();setInterval(load,1000);
+</script></body></html>
