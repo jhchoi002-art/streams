@@ -1,7 +1,7 @@
 let room=localStorage.getItem("streamsTeacherRoom")||"";
 let roomData=null;
 let unsubscribe=null;
-let lastRankSignature="";
+let pollTimer=null;
 let lastDoneMap={};
 
 async function newRoom(){
@@ -22,6 +22,7 @@ async function newRoom(){
 async function resetRoom(){
   if(!room)return newRoom();
   if(!confirm("방코드는 유지하고 게임만 초기화할까요?\n학생들은 같은 QR로 계속 접속할 수 있습니다."))return;
+
   const old=await fbGet("/streamsRooms/"+room);
   const students={};
   Object.entries(old?.students||{}).forEach(([id,s])=>{
@@ -31,9 +32,11 @@ async function resetRoom(){
       boardSimple:Array(20).fill(null),
       currentPlaced:-999,
       joined:s.joined||Date.now(),
-      updated:Date.now()
+      updated:Date.now(),
+      lastSeen:s.lastSeen||0
     };
   });
+
   await fbPut("/streamsRooms/"+room,{
     created:Date.now(),
     resetToken:Date.now(),
@@ -83,6 +86,7 @@ function getMissingStudents(){
 function renderProgress(){
   const keys=getStudentKeys();
   const done=getDoneKeys();
+
   $("turnCount").textContent=`${done.length} / ${keys.length}명`;
   $("turnFill").style.width=keys.length?`${Math.round(done.length/keys.length*100)}%`:"0%";
   $("turnMsg").style.display=(keys.length>0&&done.length===keys.length&&(roomData?.currentIndex??-1)>=0)?"block":"none";
@@ -124,16 +128,17 @@ function renderStudents(){
 function renderRank(){
   const students=roomData?.students||{};
   const keys=Object.keys(students);
-  const sig=keys.map(k=>{
-    const s=students[k], sc=scoreBoard(s.boardSimple||[]);
-    return `${k}:${s.name}:${sc.run}:${sc.score}`;
-  }).sort().join("|");
-  if(sig===lastRankSignature)return;
-  lastRankSignature=sig;
 
   const ranks=keys.map(k=>{
-    const s=students[k], sc=scoreBoard(s.boardSimple||[]);
-    return {name:s.name||k,score:sc.score,run:sc.run};
+    const s=students[k]||{};
+    const sc=scoreBoard(s.boardSimple||[]);
+    return {
+      id:k,
+      name:s.name||k,
+      score:sc.score,
+      run:sc.run,
+      updated:s.updated||0
+    };
   }).sort((a,b)=>b.score-a.score||b.run-a.run||a.name.localeCompare(b.name,"ko"));
 
   $("rankList").innerHTML=ranks.length?ranks.map((r,i)=>`<div class="rank-row">
@@ -147,30 +152,56 @@ function render(){
   if(!roomData)return;
   $("topCurrent").textContent=roomData.currentValue||"-";
   renderProgress();
-  renderStudents(); // Beta: 학생 목록은 항상 최신으로 다시 그림
-  renderRank();     // 순위는 점수 변화 시에만 다시 그림
+  renderStudents();
+  renderRank(); // 점수 실시간 동기화를 위해 매번 새로 계산
 }
 
 function openStudent(id){
-  const s=roomData?.students?.[id]; if(!s)return;
+  const s=roomData?.students?.[id]; 
+  if(!s)return;
   $("modal").classList.remove("hidden");
   $("modalTitle").textContent=(s.name||id)+" 학생 판";
-  renderBoard($("modalBoard"),{board:s.boardSimple||Array(20).fill(null),name:s.name||"",room,currentValue:roomData.currentValue||"-"});
+  renderBoard($("modalBoard"),{
+    board:s.boardSimple||Array(20).fill(null),
+    name:s.name||"",
+    room,
+    currentValue:roomData.currentValue||"-"
+  });
+}
+
+async function refreshRoom(){
+  if(!room)return;
+  const data=await fbGet("/streamsRooms/"+room);
+  if(!data){
+    await newRoom();
+    return;
+  }
+  roomData=data;
+  render();
 }
 
 function listenRoom(){
   if(unsubscribe)unsubscribe();
+  clearInterval(pollTimer);
   staticRender();
+
   if(!room)return newRoom();
+
+  // SSE + 직접 폴링을 같이 사용해 순위 점수 동기화를 안정화
   unsubscribe=fbListen("/streamsRooms/"+room, data=>{
-    roomData=data;
-    if(!roomData)newRoom();
-    else render();
+    if(data){
+      roomData=data;
+      render();
+    }
   });
+
+  refreshRoom();
+  pollTimer=setInterval(refreshRoom,700);
 }
 
 $("newRoomBtn").onclick=()=>{if(confirm("정말 새 방을 만들까요? 현재 방코드가 바뀝니다."))newRoom()};
 $("resetBtn").onclick=resetRoom;
+
 $("drawBtn").onclick=async()=>{
   if(!roomData)return;
   const ni=(roomData.currentIndex??-1)+1;
@@ -185,9 +216,13 @@ $("drawBtn").onclick=async()=>{
     const ok=confirm(`아직 입력하지 않은 학생이 있습니다.\n\n입력 완료: ${done.length} / ${keys.length}명\n\n미입력 학생\n${preview}${more}\n\n정말 다음 숫자를 뽑으시겠습니까?`);
     if(!ok)return;
   }
+
   await fbPatch("/streamsRooms/"+room,{currentIndex:ni,currentValue:roomData.deck[ni]});
+  refreshRoom();
 };
+
 $("endBtn").onclick=()=>fbPatch("/streamsRooms/"+room,{ended:true});
 $("closeModal").onclick=()=>$("modal").classList.add("hidden");
 $("modal").onclick=e=>{if(e.target.id==="modal")$("modal").classList.add("hidden")};
+
 listenRoom();
