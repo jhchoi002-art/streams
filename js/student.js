@@ -1,5 +1,5 @@
 let room=qs("room");
-let name=localStorage.getItem("streamsName")||"";
+let name="";
 let key="";
 let roomData=null;
 let board=Array(20).fill(null);
@@ -9,8 +9,9 @@ let pollTimer=null;
 let heartbeatTimer=null;
 let joined=false;
 
+// QR로 들어온 경우 방코드만 채우고, 이름은 자동 입력/자동 입장하지 않음
 $("roomInput").value=room;
-$("nameInput").value=name;
+$("nameInput").value="";
 $("joinBtn").onclick=join;
 
 function studentPath(){
@@ -37,7 +38,7 @@ async function join(){
   roomData=data;
   resetToken=String(data.resetToken||"");
 
-  // 3.3 핵심: 이름키로 저장된 기존 기록을 먼저 불러와 그대로 복구
+  // 같은 이름 기록이 있으면 기존 기록으로 이어서 진행
   const existing=await fbGet(studentPath());
 
   if(existing&&existing.board){
@@ -53,6 +54,7 @@ async function join(){
       boardSimple:scoreInfo.boardSimple,
       score:scoreInfo.score,
       run:scoreInfo.run,
+      bestRun:scoreInfo.bestRun,
       currentPlaced:-999,
       joined:Date.now(),
       updated:Date.now(),
@@ -61,11 +63,13 @@ async function join(){
     });
   }
 
+  // 이름은 저장하되, 다음 QR 입장 때 자동입장은 하지 않음
   localStorage.setItem("streamsName",name);
   localStorage.setItem("streamsRoom",room);
+
   joined=true;
 
-  // 입장 시 board는 절대 덮어쓰지 않고 접속 상태만 갱신
+  // 입장 시에는 기존 board/currentPlaced를 절대 덮어쓰지 않고 접속 상태만 갱신
   await fbPatch(studentPath(),{
     name,
     lastSeen:Date.now(),
@@ -102,11 +106,15 @@ async function pollRoom(){
   resetToken=newToken;
   roomData=data;
 
-  // 재입장/새로고침 복구용: 서버에 내 보드가 있고 로컬이 비어 있으면 복구
+  // 서버에 있는 내 보드가 있고, 로컬이 비어 있으면 복구
   const serverMe=data.students?.[key];
-  if(serverMe&&serverMe.board&&!board.some(x=>x)){
-    board=serverMe.board;
-    currentPlaced=typeof serverMe.currentPlaced==="number"?serverMe.currentPlaced:currentPlaced;
+  if(serverMe&&serverMe.board){
+    const serverHas=serverMe.board.some(x=>x);
+    const localHas=board.some(x=>x);
+    if(serverHas&&!localHas){
+      board=serverMe.board;
+      currentPlaced=typeof serverMe.currentPlaced==="number"?serverMe.currentPlaced:currentPlaced;
+    }
   }
 
   render();
@@ -205,4 +213,5 @@ window.addEventListener("beforeunload",()=>{
   }
 });
 
-if(room&&name) join();
+// 중요: 자동 join 제거
+// QR로 들어와도 반드시 이름 입력 후 입장하게 함
