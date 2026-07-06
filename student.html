@@ -70,14 +70,97 @@ function renderBoard(container,opt={}){
 <script>
 let room=roomParam,sid=localStorage.getItem('streamsSid')||('s'+Math.random().toString(36).slice(2));localStorage.setItem('streamsSid',sid);
 let name=localStorage.getItem('streamsName')||'',state=null,me=null,board=Array(20).fill(null),joined=!!(room&&name);
-function nameScreen(msg=''){app.innerHTML=`<div class="name-screen"><div class="name-box"><h1>스트림스 입장</h1>${msg?`<p style="color:#c00;font-weight:900">${msg}</p>`:''}<input id="roomInput" placeholder="방코드" value="${room||''}"><input id="nameInput" placeholder="이름" value="${name||''}" autofocus><button class="btn green" id="joinBtn">입장하기</button></div></div>`;joinBtn.onclick=join;}
-async function join(){room=roomInput.value.trim().toUpperCase();name=nameInput.value.trim();if(!room||!name){alert('방코드와 이름을 입력하세요.');return;}const r=await get('/streamsRooms/'+room);if(!r){nameScreen('방을 찾을 수 없습니다. 교사용 화면의 방코드를 확인하세요.');return;}localStorage.setItem('streamsName',name);const old=await get('/streamsRooms/'+room+'/students/'+sid);board=(old&&old.board)||Array(20).fill(null);await patch('/streamsRooms/'+room+'/students/'+sid,{name,board,boardSimple:board.map(x=>x?x.value:null),currentPlaced:old?.currentPlaced??-999,joined:Date.now()});joined=true;history.replaceState(null,'','student.html?room='+room);load();}
-async function load(){if(!room||!name){if(!joined)nameScreen();return;}state=await get('/streamsRooms/'+room);if(!state){nameScreen('방을 찾을 수 없습니다.');joined=false;return;}me=await get('/streamsRooms/'+room+'/students/'+sid);if(!me){await patch('/streamsRooms/'+room+'/students/'+sid,{name,board,boardSimple:board.map(x=>x?x.value:null),currentPlaced:-999,joined:Date.now()});me={name,board,currentPlaced:-999};}board=me.board||Array(20).fill(null);render();}
-function currentDrawObj(){const idx=state.currentIndex;if(idx==null||idx<0)return null;for(let i=0;i<20;i++){if(board[i]&&board[i].drawIndex===idx)return{cell:i,value:board[i].value};}return null;}
+
+// 입력 렉 방지용 상태
+let localEditing=false;
+let lastLocalEdit=0;
+let saveTimer=null;
+let saving=false;
+
+function nameScreen(msg=''){
+  app.innerHTML=`<div class="name-screen"><div class="name-box"><h1>스트림스 입장</h1>${msg?`<p style="color:#c00;font-weight:900">${msg}</p>`:''}<input id="roomInput" placeholder="방코드" value="${room||''}"><input id="nameInput" placeholder="이름" value="${name||''}" autofocus><button class="btn green" id="joinBtn">입장하기</button></div></div>`;
+  joinBtn.onclick=join;
+}
+async function join(){
+  room=roomInput.value.trim().toUpperCase();
+  name=nameInput.value.trim();
+  if(!room||!name){alert('방코드와 이름을 입력하세요.');return;}
+  const r=await get('/streamsRooms/'+room);
+  if(!r){nameScreen('방을 찾을 수 없습니다. 교사용 화면의 방코드를 확인하세요.');return;}
+  localStorage.setItem('streamsName',name);
+  const old=await get('/streamsRooms/'+room+'/students/'+sid);
+  board=(old&&old.board)||Array(20).fill(null);
+  await patch('/streamsRooms/'+room+'/students/'+sid,{name,board,boardSimple:board.map(x=>x?x.value:null),currentPlaced:old?.currentPlaced??-999,joined:Date.now()});
+  joined=true;
+  history.replaceState(null,'','student.html?room='+room);
+  load();
+}
+async function load(){
+  if(!room||!name){if(!joined)nameScreen();return;}
+
+  // 방금 학생이 칸을 누른 직후에는 Firebase 재조회로 화면을 덮어쓰지 않음
+  if(localEditing && Date.now()-lastLocalEdit < 900) return;
+
+  state=await get('/streamsRooms/'+room);
+  if(!state){nameScreen('방을 찾을 수 없습니다.');joined=false;return;}
+
+  me=await get('/streamsRooms/'+room+'/students/'+sid);
+  if(!me){
+    await patch('/streamsRooms/'+room+'/students/'+sid,{name,board,boardSimple:board.map(x=>x?x.value:null),currentPlaced:-999,joined:Date.now()});
+    me={name,board,currentPlaced:-999};
+  }
+
+  // 저장 중이 아닐 때만 서버 board로 덮어쓰기
+  if(!saving && !localEditing){
+    board=me.board||Array(20).fill(null);
+  }
+  render();
+}
+function currentDrawObj(){
+  const idx=state.currentIndex;
+  if(idx==null||idx<0)return null;
+  for(let i=0;i<20;i++){
+    if(board[i]&&board[i].drawIndex===idx)return{cell:i,value:board[i].value};
+  }
+  return null;
+}
 function simpleBoard(){return board.map(x=>x?x.value:null);}
-function render(){const cd=currentDrawObj();const status=state.currentIndex>=0?'현재 숫자를 놓을 칸을 선택하세요. 다음 숫자가 나오기 전까지 위치를 바꿀 수 있습니다.':'다음 숫자를 기다리는 중입니다.';renderBoard(app,{board:simpleBoard(),currentDraw:cd,name,roomCode:room,currentValue:state.currentValue||'-',interactive:true,status,onCell:place,onDone:saveNow});}
-async function place(cell){if(!state||state.currentIndex==null||state.currentIndex<0)return;const idx=state.currentIndex,val=state.currentValue;board=board.map(x=>x&&x.drawIndex===idx?null:x);board[cell]={drawIndex:idx,value:val};render();await saveNow();}
-async function saveNow(){if(!room||!sid)return;const cd=currentDrawObj();const currentPlaced=cd?state.currentIndex:-999;await patch('/streamsRooms/'+room+'/students/'+sid,{name,board,boardSimple:simpleBoard(),currentPlaced,updated:Date.now()});}
+function render(){
+  const cd=currentDrawObj();
+  const status=state.currentIndex>=0?'현재 숫자를 놓을 칸을 선택하세요. 다음 숫자가 나오기 전까지 위치를 바꿀 수 있습니다.':'다음 숫자를 기다리는 중입니다.';
+  renderBoard(app,{board:simpleBoard(),currentDraw:cd,name,roomCode:room,currentValue:state.currentValue||'-',interactive:true,status,onCell:place,onDone:saveNow});
+}
+function place(cell){
+  if(!state||state.currentIndex==null||state.currentIndex<0)return;
+
+  const idx=state.currentIndex, val=state.currentValue;
+
+  // 같은 숫자는 즉시 이동 가능
+  board=board.map(x=>x&&x.drawIndex===idx?null:x);
+  board[cell]={drawIndex:idx,value:val};
+
+  // 화면 먼저 즉시 반영
+  localEditing=true;
+  lastLocalEdit=Date.now();
+  render();
+
+  // 저장은 짧게 모아서 처리
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(saveNow,180);
+}
+async function saveNow(){
+  if(!room||!sid||!state)return;
+  clearTimeout(saveTimer);
+  saving=true;
+  const cd=currentDrawObj();
+  const currentPlaced=cd?state.currentIndex:-999;
+  try{
+    await patch('/streamsRooms/'+room+'/students/'+sid,{name,board,boardSimple:simpleBoard(),currentPlaced,updated:Date.now()});
+  }finally{
+    saving=false;
+    setTimeout(()=>{localEditing=false;},250);
+  }
+}
 if(joined)load();else nameScreen();
-setInterval(()=>{if(joined)load();},1500);
+setInterval(()=>{if(joined)load();},2000);
 </script></body></html>
