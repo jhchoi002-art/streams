@@ -56,13 +56,18 @@ function openTop3(){
   const top=rankedStudents().slice(0,3);
   if(!top.length)return;
   $("displayModal").classList.add("show");
+  document.querySelector(".display-modal-box").classList.add("board-view");
   $("displayModalTitle").textContent="TOP3 보드 비교";
-  $("displayModalContent").innerHTML=`<div class="top3-grid">${top.map((s,i)=>`<div class="top3-card"><h3>${i===0?'🥇':i===1?'🥈':'🥉'} ${s.name}<br>${s.run}칸 / ${s.score}점</h3><div class="display-board-scale" id="topBoard${i}"></div></div>`).join("")}</div>`;
-  top.forEach((s,i)=>renderBoard($("topBoard"+i),{board:s.board,name:s.name,room,currentValue:displayData.currentValue||"-"}));
+  $("displayModalContent").innerHTML=`<div class="top3-grid">${top.map((s,i)=>`<div class="top3-card"><h3>${i===0?'🥇':i===1?'🥈':'🥉'} ${s.name}<br>오름차순 ${s.run}칸 / ${s.score}점</h3><div id="topBoard${i}"></div></div>`).join("")}</div>`;
+  top.forEach((s,i)=>renderBoardOnly($("topBoard"+i),{board:s.board,name:s.name,room,currentValue:displayData.currentValue||"-"}));
 }
 
-$("displayModalClose").onclick=()=>$("displayModal").classList.remove("show");
-$("displayModal").onclick=e=>{if(e.target.id==="displayModal")$("displayModal").classList.remove("show")};
+function closeDisplayModal(){
+  $("displayModal").classList.remove("show");
+  document.querySelector(".display-modal-box").classList.remove("board-view");
+}
+$("displayModalClose").onclick=closeDisplayModal;
+$("displayModal").onclick=e=>{if(e.target.id==="displayModal")closeDisplayModal()};
 $("top3Btn").onclick=openTop3;
 
 if(room){

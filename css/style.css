@@ -55,3 +55,48 @@ a{text-decoration:none;color:inherit}
 .top3-card h3{text-align:center;margin:4px 0 8px}
 .top3-card .display-board-scale{transform:scale(.33);height:270px}
 @media(max-width:1000px){.display-layout{grid-template-columns:1fr}.display-rank-row{font-size:22px}.top3-grid{grid-template-columns:1fr}}
+
+/* 3.1 Release board-only modal */
+.board-only-wrap{
+  width:100%;
+  display:flex;
+  justify-content:center;
+  align-items:flex-start;
+  padding:8px 0 18px;
+}
+.board-only-scale{
+  width:1180px;
+  height:620px;
+  transform-origin:top center;
+}
+.single-board-only .board-only-scale{transform:scale(.78)}
+.top3-card .board-only-scale{transform:scale(.36)}
+.board-only-title{
+  text-align:center;
+  font-size:30px;
+  font-weight:900;
+  color:#06285c;
+  margin:4px 0 14px;
+}
+.board-only-sub{
+  text-align:center;
+  font-size:22px;
+  font-weight:900;
+  color:#06285c;
+  margin-bottom:8px;
+}
+.top3-card{
+  min-height:380px;
+  overflow:hidden;
+}
+.top3-card h3{
+  font-size:22px;
+  line-height:1.45;
+}
+.display-modal-box.board-view{
+  width:min(1320px,96vw);
+}
+@media(max-width:1000px){
+  .single-board-only .board-only-scale{transform:scale(.55)}
+  .top3-card .board-only-scale{transform:scale(.28)}
+}
