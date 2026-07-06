@@ -198,23 +198,18 @@ function render(){
 function place(cell){
   if(!state||state.currentIndex==null||state.currentIndex<0)return;
 
-  // 이미 숫자가 놓인 칸은 다시 사용할 수 없음
-  if(board[cell]){
-    alert('이미 숫자가 놓인 칸은 다시 사용할 수 없습니다.');
-    return;
-  }
-
   const idx=state.currentIndex;
   const val=state.currentValue;
 
-  // 아직 놓지 않은 현재 숫자만 배치 가능
-  const alreadyPlaced = board.some(x=>x && x.drawIndex===idx);
-  if(alreadyPlaced){
-    alert('이번 숫자는 이미 배치했습니다.');
+  // 다른 턴에 이미 놓인 칸에는 넣을 수 없음
+  if(board[cell] && board[cell].drawIndex !== idx){
+    alert('이미 이전 숫자가 놓인 칸입니다.');
     return;
   }
 
-  board[cell]={drawIndex:idx,value:val};
+  // 같은 턴에 놓은 숫자는 다른 빈 칸으로 이동 가능
+  board = board.map(x => x && x.drawIndex === idx ? null : x);
+  board[cell] = {drawIndex:idx, value:val};
 
   render();
   clearTimeout(saveTimer);
