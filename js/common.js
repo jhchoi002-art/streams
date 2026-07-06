@@ -82,3 +82,97 @@ function scorePayloadFromBoard(board){
   const sc=scoreBoard(b);
   return {boardSimple:b, score:sc.score, run:sc.run, bestRun:sc.bestRun||sc.run};
 }
+
+
+// ===== STREAMS 4.0 RC3: Firebase board 정규화 =====
+// Firebase RTDB가 배열을 객체 {"0":..., "1":...} 형태로 돌려주는 경우가 있어
+// 모든 화면에서 board를 반드시 길이 20 배열로 바꿔 사용합니다.
+function normalizeBoard(board){
+  const arr=Array(20).fill(null);
+  if(!board) return arr;
+
+  if(Array.isArray(board)){
+    for(let i=0;i<20;i++){
+      arr[i]=board[i]??null;
+    }
+    return arr;
+  }
+
+  if(typeof board==="object"){
+    Object.keys(board).forEach(k=>{
+      const i=Number(k);
+      if(Number.isInteger(i)&&i>=0&&i<20){
+        arr[i]=board[k]??null;
+      }
+    });
+    return arr;
+  }
+
+  return arr;
+}
+
+function simpleBoard(board){
+  return normalizeBoard(board).map(x=>{
+    if(x&&typeof x==="object"&&"value" in x) return x.value;
+    return x??null;
+  });
+}
+
+function scoreBoard(board){
+  const arr=simpleBoard(board);
+  let totalScore=0;
+  let totalRun=0;
+  let bestRun=0;
+
+  function addRun(len){
+    if(len<=0)return;
+    totalRun+=len;
+    bestRun=Math.max(bestRun,len);
+    totalScore+=SCORE_MAP[len]??0;
+  }
+
+  let runLen=0;
+  let last=-Infinity;
+
+  for(let i=0;i<arr.length;i++){
+    const v=arr[i];
+
+    if(v===null||v===undefined||v===""){
+      addRun(runLen);
+      runLen=0;
+      last=-Infinity;
+      continue;
+    }
+
+    if(v==="★"){
+      runLen++;
+      continue;
+    }
+
+    const n=Number(v);
+    if(Number.isNaN(n)){
+      addRun(runLen);
+      runLen=0;
+      last=-Infinity;
+      continue;
+    }
+
+    if(runLen>0&&n<last){
+      addRun(runLen);
+      runLen=1;
+      last=n;
+    }else{
+      runLen++;
+      last=n;
+    }
+  }
+
+  addRun(runLen);
+  return {run:totalRun,bestRun,score:totalScore};
+}
+
+function scorePayloadFromBoard(board){
+  const b=simpleBoard(board);
+  const sc=scoreBoard(b);
+  return {boardSimple:b,score:sc.score,run:sc.run,bestRun:sc.bestRun||sc.run};
+}

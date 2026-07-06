@@ -101,7 +101,7 @@ a{text-decoration:none;color:inherit}
   .top3-card .board-only-scale{transform:scale(.28)}
 }
 
-/* STREAMS 4.0 RC - copy room code */
+/* STREAMS 4.0 RC3 */
 .room-code-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .copy-code-btn{font-size:17px;padding:11px 14px}
 .copy-toast{
