@@ -123,29 +123,206 @@ function renderBoard(container,opt={}){
 }
 </script>
 <script>
-let room=localStorage.getItem('streamsTeacherRoom')||'',state=null,selectedId=null,studentKeys=[];
-async function createRoom(){room=makeCode();localStorage.setItem('streamsTeacherRoom',room);await put('/streamsRooms/'+room,{created:Date.now(),currentIndex:-1,currentValue:'-',deck:makeDeck().slice(0,20),students:{},ended:false});renderStatic();await load();}
-function renderStatic(){roomCode.textContent=room||'-';topRoom.textContent=room||'-';const join=location.origin+location.pathname.replace('teacher.html','student.html')+'?room='+(room||'');joinUrl.textContent=join;qr.src='https://api.qrserver.com/v1/create-qr-code/?size=230x230&data='+encodeURIComponent(join);displayLink.href='display.html?room='+(room||'');}
-async function load(){if(!room){await createRoom();return;}state=await get('/streamsRooms/'+room);if(!state){await createRoom();return;}renderStatic();curTop.textContent=state.currentValue||'-';const ss=state.students||{};studentKeys=Object.keys(ss);
-const currentTurn = state.currentIndex;
-const total = studentKeys.length;
-const doneCount = studentKeys.filter(k => (ss[k].currentPlaced === currentTurn && currentTurn >= 0)).length;
-if(document.getElementById('turnCount')){
-  turnCount.textContent = `${doneCount} / ${total}명`;
-  turnFill.style.width = total ? `${Math.round(doneCount/total*100)}%` : '0%';
-  turnMsg.style.display = (total>0 && doneCount===total && currentTurn>=0) ? 'block' : 'none';
-  draw.textContent = total>0 ? `다음 숫자 뽑기 (${doneCount}/${total})` : '다음 숫자 뽑기';
+let room=localStorage.getItem('streamsTeacherRoom')||'';
+let state=null;
+let selectedId=null;
+let studentKeys=[];
+let teacherTimer=null;
+
+async function createRoom(){
+  room=makeCode();
+  localStorage.setItem('streamsTeacherRoom',room);
+  await put('/streamsRooms/'+room,{
+    created:Date.now(),
+    currentIndex:-1,
+    currentValue:'-',
+    deck:makeDeck().slice(0,20),
+    students:{},
+    ended:false
+  });
+  renderStatic();
+  await load();
 }
-students.innerHTML=studentKeys.length?studentKeys.map(k=>{const s=ss[k],done=s.currentPlaced===state.currentIndex&&state.currentIndex>=0,sc=scoreBoard(s.boardSimple||[]);return `<div class="student-item ${done?'done':'pending'}" data-id="${k}"><div>${done?'🟢':'⚪'} ${s.name||k}</div><div class="small">${done?'입력 완료':'미입력'} · ${sc.run}칸 / ${sc.score}점</div></div>`}).join(''):'아직 학생 없음';document.querySelectorAll('.student-item').forEach(el=>el.onclick=()=>openStudent(el.dataset.id));const ranks=studentKeys.map(k=>{const s=ss[k],sc=scoreBoard(s.boardSimple||[]);return{name:s.name||k,score:sc.score,run:sc.run}}).sort((a,b)=>b.score-a.score||b.run-a.run);rank.innerHTML=ranks.map((r,i)=>{const medal=i===0?'🥇 ':i===1?'🥈 ':i===2?'🥉 ':'';return `<div class="rank-row"><span>${medal}${i+1}. ${r.name}</span><span>${r.run}칸 / ${r.score}점</span></div>`}).join('');}
-function openStudent(id){selectedId=id;const s=(state.students||{})[id];if(!s)return;const sc=scoreBoard(s.boardSimple||[]);selected.innerHTML=`<b>${s.name}</b> : ${sc.run}칸 / ${sc.score}점`;modalTitle.textContent=(s.name||id)+' 학생 판';modalBg.classList.add('show');renderBoard(modalBoard,{board:s.boardSimple||Array(20).fill(null),name:s.name||'',roomCode:room,currentValue:state.currentValue||'-'});}
-function closeModal(){modalBg.classList.remove('show');}
-closeModal.onclick=closeModal;modalBg.onclick=e=>{if(e.target.id==='modalBg')closeModal();};document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
-prevStu.onclick=()=>{let i=studentKeys.indexOf(selectedId);if(i>0)openStudent(studentKeys[i-1]);};nextStu.onclick=()=>{let i=studentKeys.indexOf(selectedId);if(i>=0&&i<studentKeys.length-1)openStudent(studentKeys[i+1]);};
+
+async function resetSameRoom(){
+  if(!room){ await createRoom(); return; }
+  if(!confirm('현재 방코드는 유지하고 게임만 초기화할까요?\n학생들은 같은 QR로 계속 접속할 수 있습니다.')) return;
+
+  const old = await get('/streamsRooms/'+room);
+  const students = old?.students || {};
+  const cleared = {};
+  Object.keys(students).forEach(k=>{
+    cleared[k] = {
+      name: students[k].name || k,
+      board: Array(20).fill(null),
+      boardSimple: Array(20).fill(null),
+      currentPlaced: -999,
+      joined: students[k].joined || Date.now(),
+      updated: Date.now()
+    };
+  });
+
+  await put('/streamsRooms/'+room,{
+    created:Date.now(),
+    currentIndex:-1,
+    currentValue:'-',
+    deck:makeDeck().slice(0,20),
+    students:cleared,
+    ended:false
+  });
+  await load();
+}
+
+function renderStatic(){
+  roomCode.textContent=room||'-';
+  topRoom.textContent=room||'-';
+  const join=location.origin+location.pathname.replace('teacher.html','student.html')+'?room='+(room||'');
+  joinUrl.textContent=join;
+  qr.src='https://api.qrserver.com/v1/create-qr-code/?size=230x230&data='+encodeURIComponent(join);
+  displayLink.href='display.html?room='+(room||'');
+}
+
+function renderProgress(studentsObj){
+  const currentTurn = state?.currentIndex ?? -1;
+  studentKeys = Object.keys(studentsObj || {});
+  const total = studentKeys.length;
+  const doneCount = currentTurn >= 0
+    ? studentKeys.filter(k => studentsObj[k]?.currentPlaced === currentTurn).length
+    : 0;
+
+  if(document.getElementById('turnCount')){
+    turnCount.textContent = `${doneCount} / ${total}명`;
+    turnFill.style.width = total ? `${Math.round(doneCount/total*100)}%` : '0%';
+    turnMsg.style.display = (total>0 && doneCount===total && currentTurn>=0) ? 'block' : 'none';
+  }
+
+  if(document.getElementById('draw')){
+    draw.textContent = total>0 ? `다음 숫자 뽑기 (${doneCount}/${total})` : '다음 숫자 뽑기';
+  }
+}
+
+function renderStudents(studentsObj){
+  const studentsData = studentsObj || {};
+  const currentTurn = state?.currentIndex ?? -1;
+  studentKeys = Object.keys(studentsData);
+
+  if(!studentKeys.length){
+    students.innerHTML = '아직 학생 없음';
+    return;
+  }
+
+  students.innerHTML = studentKeys.map(k=>{
+    const s = studentsData[k];
+    const done = currentTurn >= 0 && s.currentPlaced === currentTurn;
+    const sc = scoreBoard(s.boardSimple || []);
+    return `<div class="student-item ${done?'done':'pending'}" data-id="${k}">
+      <div>${done?'🟢':'⚪'} ${s.name||k}</div>
+      <div class="small">${done?'입력 완료':'미입력'} · ${sc.run}칸 / ${sc.score}점</div>
+    </div>`;
+  }).join('');
+
+  document.querySelectorAll('.student-item').forEach(el=>el.onclick=()=>openStudent(el.dataset.id));
+}
+
+function renderRank(studentsObj){
+  const studentsData = studentsObj || {};
+  const ranks = Object.keys(studentsData).map(k=>{
+    const s = studentsData[k];
+    const sc = scoreBoard(s.boardSimple || []);
+    return {name:s.name||k, score:sc.score, run:sc.run};
+  }).sort((a,b)=>b.score-a.score||b.run-a.run);
+
+  rank.innerHTML = ranks.map((r,i)=>{
+    const medal=i===0?'🥇 ':i===1?'🥈 ':i===2?'🥉 ':'';
+    return `<div class="rank-row"><span>${medal}${i+1}. ${r.name}</span><span>${r.run}칸 / ${r.score}점</span></div>`;
+  }).join('');
+}
+
+async function load(){
+  if(!room){ await createRoom(); return; }
+
+  const newState = await get('/streamsRooms/'+room);
+  if(!newState){ await createRoom(); return; }
+
+  state = newState;
+  renderStatic();
+  curTop.textContent = state.currentValue || '-';
+
+  const studentsObj = state.students || {};
+  renderProgress(studentsObj);
+  renderStudents(studentsObj);
+  renderRank(studentsObj);
+
+  if(selectedId) {
+    const s = studentsObj[selectedId];
+    if(s){
+      const sc=scoreBoard(s.boardSimple||[]);
+      selected.innerHTML=`<b>${s.name}</b> : ${sc.run}칸 / ${sc.score}점`;
+      if(modalBg.classList.contains('show')){
+        modalTitle.textContent=(s.name||selectedId)+' 학생 판';
+        renderBoard(modalBoard,{board:s.boardSimple||Array(20).fill(null),name:s.name||'',roomCode:room,currentValue:state.currentValue||'-'});
+      }
+    }
+  }
+}
+
+function openStudent(id){
+  selectedId=id;
+  const s=(state.students||{})[id];
+  if(!s)return;
+  const sc=scoreBoard(s.boardSimple||[]);
+  selected.innerHTML=`<b>${s.name}</b> : ${sc.run}칸 / ${sc.score}점`;
+  modalTitle.textContent=(s.name||id)+' 학생 판';
+  modalBg.classList.add('show');
+  renderBoard(modalBoard,{board:s.boardSimple||Array(20).fill(null),name:s.name||'',roomCode:room,currentValue:state.currentValue||'-'});
+}
+
+function closeModal(){ modalBg.classList.remove('show'); }
+
+closeModal.onclick=closeModal;
+modalBg.onclick=e=>{if(e.target.id==='modalBg')closeModal();};
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+
+prevStu.onclick=()=>{
+  let i=studentKeys.indexOf(selectedId);
+  if(i>0)openStudent(studentKeys[i-1]);
+};
+nextStu.onclick=()=>{
+  let i=studentKeys.indexOf(selectedId);
+  if(i>=0&&i<studentKeys.length-1)openStudent(studentKeys[i+1]);
+};
+
 function confirmNewRoom(){
   if(confirm('정말 새 방을 만드시겠습니까?\n현재 게임은 종료되고 새 방코드가 만들어집니다.')){
     createRoom();
   }
 }
-if(document.getElementById('newRoomTop')) newRoomTop.onclick=confirmNewRoom;draw.onclick=async()=>{if(!state)return;const ni=(state.currentIndex??-1)+1;if(ni>=20){alert('20개를 모두 뽑았습니다.');return;}draw.disabled=true;draw.textContent='뽑는 중...';setTimeout(async()=>{await patch('/streamsRooms/'+room,{currentIndex:ni,currentValue:state.deck[ni]});draw.disabled=false;await load();},280);};end.onclick=async()=>{await patch('/streamsRooms/'+room,{ended:true});await load();};reset.onclick=async()=>{if(confirm('현재 방을 초기화할까요?'))await createRoom();};
-renderStatic();load();setInterval(load,350);
-</script></body></html>
+
+if(document.getElementById('newRoomTop')) newRoomTop.onclick=confirmNewRoom;
+if(document.getElementById('newRoom')) newRoom.onclick=confirmNewRoom;
+
+draw.onclick=async()=>{
+  if(!state)return;
+  const ni=(state.currentIndex??-1)+1;
+  if(ni>=20){alert('20개를 모두 뽑았습니다.');return;}
+  draw.disabled=true;
+  const oldText=draw.textContent;
+  draw.textContent='뽑는 중...';
+  await patch('/streamsRooms/'+room,{currentIndex:ni,currentValue:state.deck[ni]});
+  draw.disabled=false;
+  await load();
+};
+
+end.onclick=async()=>{
+  await patch('/streamsRooms/'+room,{ended:true});
+  await load();
+};
+
+reset.onclick=resetSameRoom;
+
+renderStatic();
+load();
+clearInterval(teacherTimer);
+teacherTimer=setInterval(load,350);
+</script>
+</body></html>

@@ -80,6 +80,8 @@ a{text-decoration:none;color:inherit}
 .student-item.done{border-color:#18ad6b!important;background:#effff6!important}
 .footer .done{display:none!important}
 
+
+.footer .done{display:none!important}
 </style></head><body><div id="app"></div><script>
 const DB="https://minority-stock-game-default-rtdb.asia-southeast1.firebasedatabase.app";
 const $=(id)=>document.getElementById(id);
@@ -262,10 +264,8 @@ function place(cell){
 
 async function saveNow(){
   if(!room||!sid||!state)return;
-
   const cd=currentDrawObj();
   const currentPlaced=cd?state.currentIndex:-999;
-
   await patch('/streamsRooms/'+room+'/students/'+sid,{
     name,
     board,
