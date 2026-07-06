@@ -198,14 +198,25 @@ function render(){
 function place(cell){
   if(!state||state.currentIndex==null||state.currentIndex<0)return;
 
+  // 이미 숫자가 놓인 칸은 다시 사용할 수 없음
+  if(board[cell]){
+    alert('이미 숫자가 놓인 칸은 다시 사용할 수 없습니다.');
+    return;
+  }
+
   const idx=state.currentIndex;
   const val=state.currentValue;
 
-  // 현재 회차 숫자만 이동 가능. 이전 회차 숫자는 유지.
-  board=board.map(x=>x&&x.drawIndex===idx?null:x);
+  // 아직 놓지 않은 현재 숫자만 배치 가능
+  const alreadyPlaced = board.some(x=>x && x.drawIndex===idx);
+  if(alreadyPlaced){
+    alert('이번 숫자는 이미 배치했습니다.');
+    return;
+  }
+
   board[cell]={drawIndex:idx,value:val};
 
-  render();       // 즉시 표시
+  render();
   clearTimeout(saveTimer);
   saveTimer=setTimeout(saveNow,80);
 }
