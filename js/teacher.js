@@ -33,7 +33,8 @@ async function resetRoom(){
       currentPlaced:-999,
       joined:s.joined||Date.now(),
       updated:Date.now(),
-      lastSeen:s.lastSeen||0
+      lastSeen:s.lastSeen||0,
+      clientId:s.clientId||""
     };
   });
 
@@ -47,6 +48,7 @@ async function resetRoom(){
     ended:false
   });
   lastDoneMap={};
+  await refreshRoom();
 }
 
 function pickedCount(){
@@ -58,7 +60,7 @@ function staticRender(){
   $("roomCode").textContent=room||"-";
   const link=location.origin+location.pathname.replace("teacher.html","student.html")+"?room="+(room||"");
   $("joinLink").textContent=link;
-  $("qr").src= room ? "https://api.qrserver.com/v1/create-qr-code/?size=230x230&data="+encodeURIComponent(link) : "";
+  $("qr").src=room?"https://api.qrserver.com/v1/create-qr-code/?size=230x230&data="+encodeURIComponent(link):"";
   $("displayLink").href="display.html?room="+(room||"");
 }
 
@@ -107,7 +109,7 @@ function renderStudents(){
   const keys=Object.keys(students).sort((a,b)=>(students[a].name||a).localeCompare(students[b].name||b,"ko"));
 
   $("studentList").innerHTML=keys.length?keys.map(k=>{
-    const s=students[k];
+    const s=students[k]||{};
     const done=current>=0&&s.currentPlaced===current;
     const wasDone=lastDoneMap[k]===true;
     const flash=done&&!wasDone?' flash':'';
@@ -136,8 +138,7 @@ function renderRank(){
       id:k,
       name:s.name||k,
       score:sc.score,
-      run:sc.run,
-      updated:s.updated||0
+      run:sc.run
     };
   }).sort((a,b)=>b.score-a.score||b.run-a.run||a.name.localeCompare(b.name,"ko"));
 
@@ -153,11 +154,11 @@ function render(){
   $("topCurrent").textContent=roomData.currentValue||"-";
   renderProgress();
   renderStudents();
-  renderRank(); // 점수 실시간 동기화를 위해 매번 새로 계산
+  renderRank();
 }
 
 function openStudent(id){
-  const s=roomData?.students?.[id]; 
+  const s=roomData?.students?.[id];
   if(!s)return;
   $("modal").classList.remove("hidden");
   $("modalTitle").textContent=(s.name||id)+" 학생 판";
@@ -187,8 +188,8 @@ function listenRoom(){
 
   if(!room)return newRoom();
 
-  // SSE + 직접 폴링을 같이 사용해 순위 점수 동기화를 안정화
-  unsubscribe=fbListen("/streamsRooms/"+room, data=>{
+  // SSE + 직접 폴링. 점수 동기화 안정성을 위해 폴링을 0.5초로 둡니다.
+  unsubscribe=fbListen("/streamsRooms/"+room,data=>{
     if(data){
       roomData=data;
       render();
@@ -196,7 +197,7 @@ function listenRoom(){
   });
 
   refreshRoom();
-  pollTimer=setInterval(refreshRoom,700);
+  pollTimer=setInterval(refreshRoom,500);
 }
 
 $("newRoomBtn").onclick=()=>{if(confirm("정말 새 방을 만들까요? 현재 방코드가 바뀝니다."))newRoom()};
@@ -209,19 +210,22 @@ $("drawBtn").onclick=async()=>{
 
   const keys=getStudentKeys();
   const done=getDoneKeys();
-  if((roomData.currentIndex??-1)>=0 && keys.length>0 && done.length<keys.length){
+  if((roomData.currentIndex??-1)>=0&&keys.length>0&&done.length<keys.length){
     const missing=getMissingStudents();
     const preview=missing.slice(0,12).map(n=>"• "+n).join("\n");
-    const more=missing.length>12?`\n외 ${missing.length-12}명`: "";
+    const more=missing.length>12?`\n외 ${missing.length-12}명`:"";
     const ok=confirm(`아직 입력하지 않은 학생이 있습니다.\n\n입력 완료: ${done.length} / ${keys.length}명\n\n미입력 학생\n${preview}${more}\n\n정말 다음 숫자를 뽑으시겠습니까?`);
     if(!ok)return;
   }
 
   await fbPatch("/streamsRooms/"+room,{currentIndex:ni,currentValue:roomData.deck[ni]});
-  refreshRoom();
+  await refreshRoom();
 };
 
-$("endBtn").onclick=()=>fbPatch("/streamsRooms/"+room,{ended:true});
+$("endBtn").onclick=async()=>{
+  await fbPatch("/streamsRooms/"+room,{ended:true});
+  await refreshRoom();
+};
 $("closeModal").onclick=()=>$("modal").classList.add("hidden");
 $("modal").onclick=e=>{if(e.target.id==="modal")$("modal").classList.add("hidden")};
 
