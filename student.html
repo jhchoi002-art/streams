@@ -71,17 +71,17 @@ function renderBoard(container,opt={}){
 let room=roomParam,sid=localStorage.getItem('streamsSid')||('s'+Math.random().toString(36).slice(2));localStorage.setItem('streamsSid',sid);
 let name=localStorage.getItem('streamsName')||'',state=null,me=null,board=Array(20).fill(null),joined=!!(room&&name);
 
-// 렉 방지 + 다음 숫자 즉시 반영용 상태
-let localEditing=false;
-let lastLocalEdit=0;
-let saveTimer=null;
+// 렉 방지: 칸 클릭은 즉시 화면 반영, 저장은 백그라운드
 let saving=false;
-let lastSeenIndex=null;
+let dirty=false;
+let lastSavedJson='';
+let stateTimer=null;
 
 function nameScreen(msg=''){
   app.innerHTML=`<div class="name-screen"><div class="name-box"><h1>스트림스 입장</h1>${msg?`<p style="color:#c00;font-weight:900">${msg}</p>`:''}<input id="roomInput" placeholder="방코드" value="${room||''}"><input id="nameInput" placeholder="이름" value="${name||''}" autofocus><button class="btn green" id="joinBtn">입장하기</button></div></div>`;
   joinBtn.onclick=join;
 }
+
 async function join(){
   room=roomInput.value.trim().toUpperCase();
   name=nameInput.value.trim();
@@ -91,89 +91,136 @@ async function join(){
   localStorage.setItem('streamsName',name);
   const old=await get('/streamsRooms/'+room+'/students/'+sid);
   board=(old&&old.board)||Array(20).fill(null);
-  await patch('/streamsRooms/'+room+'/students/'+sid,{name,board,boardSimple:board.map(x=>x?x.value:null),currentPlaced:old?.currentPlaced??-999,joined:Date.now()});
+  lastSavedJson=JSON.stringify(board);
+  await patch('/streamsRooms/'+room+'/students/'+sid,{name,board,boardSimple:simpleBoard(),currentPlaced:old?.currentPlaced??-999,joined:Date.now()});
   joined=true;
   history.replaceState(null,'','student.html?room='+room);
-  await load(true);
+  await loadAll();
+  startRealtime();
 }
-async function load(force=false){
+
+async function loadAll(){
   if(!room||!name){if(!joined)nameScreen();return;}
-
-  const newState=await get('/streamsRooms/'+room);
-  if(!newState){nameScreen('방을 찾을 수 없습니다.');joined=false;return;}
-
-  const newIndex=newState.currentIndex;
-  const indexChanged = lastSeenIndex !== null && newIndex !== lastSeenIndex;
-
-  // 교사가 다음 숫자를 뽑은 경우에는 localEditing을 강제로 풀어서 새 숫자가 바로 보이게 함
-  if(indexChanged){
-    localEditing=false;
-    saving=false;
-    clearTimeout(saveTimer);
+  state=await get('/streamsRooms/'+room);
+  if(!state){nameScreen('방을 찾을 수 없습니다.');joined=false;return;}
+  me=await get('/streamsRooms/'+room+'/students/'+sid);
+  if(!me){
+    await patch('/streamsRooms/'+room+'/students/'+sid,{name,board,boardSimple:simpleBoard(),currentPlaced:-999,joined:Date.now()});
+    me={name,board,currentPlaced:-999};
   }
+  if(!dirty && me.board){
+    board=me.board;
+    lastSavedJson=JSON.stringify(board);
+  }
+  render();
+}
 
+// 핵심 수정: 교사 숫자는 따로 자주 읽고, 학생 보드 저장 상태와 분리
+async function loadRoomOnly(){
+  if(!joined||!room)return;
+  const newState=await get('/streamsRooms/'+room);
+  if(!newState)return;
+
+  const oldIndex=state ? state.currentIndex : null;
   state=newState;
-  lastSeenIndex=newIndex;
 
-  // 방금 칸을 누른 직후에는 내 보드를 덮어쓰지 않되, 상단 현재 숫자는 render로 즉시 갱신
-  if(localEditing && !force && Date.now()-lastLocalEdit < 650){
+  // 다음 숫자가 바뀌면 무조건 화면을 즉시 다시 그림
+  if(oldIndex!==state.currentIndex){
+    dirty=false;
+    await loadMyBoardOnce();
     render();
     return;
   }
 
-  me=await get('/streamsRooms/'+room+'/students/'+sid);
-  if(!me){
-    await patch('/streamsRooms/'+room+'/students/'+sid,{name,board,boardSimple:board.map(x=>x?x.value:null),currentPlaced:-999,joined:Date.now()});
-    me={name,board,currentPlaced:-999};
-  }
-
-  if(!saving && !localEditing){
-    board=me.board||Array(20).fill(null);
-  }
   render();
 }
+
+async function loadMyBoardOnce(){
+  if(!room||!sid)return;
+  const newMe=await get('/streamsRooms/'+room+'/students/'+sid);
+  if(newMe){
+    me=newMe;
+    if(!dirty && !saving && newMe.board){
+      board=newMe.board;
+      lastSavedJson=JSON.stringify(board);
+    }
+  }
+}
+
+function startRealtime(){
+  clearInterval(stateTimer);
+  stateTimer=setInterval(loadRoomOnly,700);
+}
+
 function currentDrawObj(){
-  const idx=state.currentIndex;
+  const idx=state?.currentIndex;
   if(idx==null||idx<0)return null;
   for(let i=0;i<20;i++){
     if(board[i]&&board[i].drawIndex===idx)return{cell:i,value:board[i].value};
   }
   return null;
 }
+
 function simpleBoard(){return board.map(x=>x?x.value:null);}
+
 function render(){
+  if(!state)return;
   const cd=currentDrawObj();
   const status=state.currentIndex>=0?'현재 숫자를 놓을 칸을 선택하세요. 다음 숫자가 나오기 전까지 위치를 바꿀 수 있습니다.':'다음 숫자를 기다리는 중입니다.';
   renderBoard(app,{board:simpleBoard(),currentDraw:cd,name,roomCode:room,currentValue:state.currentValue||'-',interactive:true,status,onCell:place,onDone:saveNow});
 }
+
 function place(cell){
   if(!state||state.currentIndex==null||state.currentIndex<0)return;
 
-  const idx=state.currentIndex, val=state.currentValue;
+  const idx=state.currentIndex;
+  const val=state.currentValue;
+
+  // 같은 회차 숫자만 이동 가능, 이전 숫자는 유지
   board=board.map(x=>x&&x.drawIndex===idx?null:x);
   board[cell]={drawIndex:idx,value:val};
 
-  localEditing=true;
-  lastLocalEdit=Date.now();
-  render();
-
-  clearTimeout(saveTimer);
-  saveTimer=setTimeout(saveNow,150);
+  dirty=true;
+  render();              // 화면 즉시 반영
+  saveSoon();            // 저장은 백그라운드
 }
+
+let saveTimer=null;
+function saveSoon(){
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(saveNow,100);
+}
+
 async function saveNow(){
   if(!room||!sid||!state)return;
   clearTimeout(saveTimer);
+
+  const json=JSON.stringify(board);
+  if(json===lastSavedJson && !dirty)return;
+
   saving=true;
   const cd=currentDrawObj();
   const currentPlaced=cd?state.currentIndex:-999;
+
   try{
-    await patch('/streamsRooms/'+room+'/students/'+sid,{name,board,boardSimple:simpleBoard(),currentPlaced,updated:Date.now()});
+    await patch('/streamsRooms/'+room+'/students/'+sid,{
+      name,
+      board,
+      boardSimple:simpleBoard(),
+      currentPlaced,
+      updated:Date.now()
+    });
+    lastSavedJson=json;
+    dirty=false;
   }finally{
     saving=false;
-    setTimeout(()=>{localEditing=false;},180);
   }
 }
-if(joined)load(true);else nameScreen();
-setInterval(()=>{if(joined)load(false);},800);
+
+if(joined){
+  loadAll().then(startRealtime);
+}else{
+  nameScreen();
+}
 </script>
 </body></html>
