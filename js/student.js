@@ -5,12 +5,21 @@ let roomData=null;
 let board=Array(20).fill(null);
 let currentPlaced=-999;
 let resetToken="";
-let unsubscribe=null;
+let pollTimer=null;
 let heartbeatTimer=null;
+let joined=false;
 
 $("roomInput").value=room;
 $("nameInput").value=name;
 $("joinBtn").onclick=join;
+
+function studentPath(){
+  return "/streamsRooms/"+room+"/students/"+key;
+}
+
+function activeStudent(s){
+  return Date.now()-(s?.lastSeen||0)<9000;
+}
 
 async function join(){
   room=$("roomInput").value.trim().toUpperCase();
@@ -22,32 +31,22 @@ async function join(){
   }
 
   key=nameKey(name);
-
   const data=await fbGet("/streamsRooms/"+room);
   if(!data){
     $("joinMsg").textContent="방을 찾을 수 없습니다.";
     return;
   }
 
-  roomData=data;
-  resetToken=String(data.resetToken||"");
-
   const existing=(data.students||{})[key];
 
+  // 기존 기록이 있으면 무조건 그 기록으로 이어서 한다. 절대 빈 board로 덮어쓰지 않는다.
   if(existing){
-    // 핵심: 같은 이름 기록이 있으면 기존 board/currentPlaced를 절대 초기화하지 않음
     board=existing.board||Array(20).fill(null);
-    currentPlaced=typeof existing.currentPlaced==="number" ? existing.currentPlaced : -999;
-    await fbPatch("/streamsRooms/"+room+"/students/"+key,{
-      name,
-      lastSeen:Date.now(),
-      updated:existing.updated||Date.now(),
-      online:true
-    });
+    currentPlaced=typeof existing.currentPlaced==="number"?existing.currentPlaced:-999;
   }else{
     board=Array(20).fill(null);
     currentPlaced=-999;
-    await fbPatch("/streamsRooms/"+room+"/students/"+key,{
+    await fbPatch(studentPath(),{
       name,
       board,
       boardSimple:simpleBoard(board),
@@ -60,64 +59,75 @@ async function join(){
   }
 
   localStorage.setItem("streamsName",name);
-  localStorage.setItem("streamsRoom",room);
+  roomData=data;
+  resetToken=String(data.resetToken||"");
+  joined=true;
+
+  // 입장 시에는 board/currentPlaced를 저장하지 않고 접속 상태만 저장한다.
+  // 이게 기존 보드가 날아가던 핵심 원인이었음.
+  await fbPatch(studentPath(),{
+    name,
+    lastSeen:Date.now(),
+    online:true
+  });
 
   $("joinScreen").classList.add("hidden");
   $("gameScreen").classList.remove("hidden");
   history.replaceState(null,"","student.html?room="+room);
 
-  listenRoom();
+  startPolling();
   startHeartbeat();
   render();
 }
 
-function listenRoom(){
-  if(unsubscribe)unsubscribe();
+async function pollRoom(){
+  if(!joined||!room)return;
+  const data=await fbGet("/streamsRooms/"+room);
+  if(!data)return;
 
-  unsubscribe=fbListen("/streamsRooms/"+room,async data=>{
-    if(!data)return;
+  const newToken=String(data.resetToken||"");
 
-    const newToken=String(data.resetToken||"");
-
-    // 교사가 초기화한 경우에만 학생 보드 삭제
-    if(resetToken && newToken!==resetToken){
-      board=Array(20).fill(null);
-      currentPlaced=-999;
-      roomData=data;
-      resetToken=newToken;
-      await fbPatch("/streamsRooms/"+room+"/students/"+key,{
-        name,
-        board,
-        boardSimple:simpleBoard(board),
-        currentPlaced:-999,
-        updated:Date.now(),
-        lastSeen:Date.now(),
-        online:true
-      });
-      render();
-      return;
-    }
-
-    resetToken=newToken;
+  // 교사가 초기화했을 때만 보드를 삭제
+  if(resetToken&&newToken!==resetToken){
+    board=Array(20).fill(null);
+    currentPlaced=-999;
     roomData=data;
-
-    // 서버에 저장된 내 보드가 있으면, 내 로컬과 병합하지 말고 서버 최신 상태를 그대로 사용
-    // 재입장/새로고침 시 기존 진행상황 복구를 확실히 하기 위한 처리
-    const serverMe=data.students?.[key];
-    if(serverMe&&serverMe.board){
-      board=serverMe.board;
-      currentPlaced=typeof serverMe.currentPlaced==="number" ? serverMe.currentPlaced : currentPlaced;
-    }
-
+    resetToken=newToken;
+    await saveStudent();
     render();
-  });
+    return;
+  }
+
+  resetToken=newToken;
+  roomData=data;
+
+  // 서버에 있는 내 데이터를 읽어와서 재입장/다른 탭 상태를 반영.
+  // 단, 이미 조작 중인 현재 로컬이 비어있지 않은데 서버가 비어있으면 덮어쓰지 않음.
+  const serverMe=data.students?.[key];
+  if(serverMe&&serverMe.board){
+    const serverHas = serverMe.board.some(x=>x);
+    const localHas = board.some(x=>x);
+    if(serverHas || !localHas){
+      board=serverMe.board;
+      currentPlaced=typeof serverMe.currentPlaced==="number"?serverMe.currentPlaced:currentPlaced;
+    }
+  }
+
+  render();
+}
+
+function startPolling(){
+  clearInterval(pollTimer);
+  pollTimer=setInterval(pollRoom,500);
+  pollRoom();
 }
 
 function startHeartbeat(){
   clearInterval(heartbeatTimer);
   heartbeatTimer=setInterval(()=>{
     if(room&&key){
-      fbPatch("/streamsRooms/"+room+"/students/"+key,{
+      fbPatch(studentPath(),{
+        name,
         lastSeen:Date.now(),
         online:true
       });
@@ -168,8 +178,9 @@ async function place(cell){
 }
 
 async function saveStudent(){
+  if(!room||!key)return;
   const updated=Date.now();
-  await fbPatch("/streamsRooms/"+room+"/students/"+key,{
+  await fbPatch(studentPath(),{
     name,
     board,
     boardSimple:simpleBoard(board),
@@ -183,7 +194,7 @@ async function saveStudent(){
 window.addEventListener("beforeunload",()=>{
   if(room&&key){
     try{
-      fetch(DB_URL+"/streamsRooms/"+room+"/students/"+key+".json",{
+      fetch(DB_URL+studentPath()+".json",{
         method:"PATCH",
         keepalive:true,
         headers:{"Content-Type":"application/json"},

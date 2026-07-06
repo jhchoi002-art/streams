@@ -1,21 +1,32 @@
 let room=localStorage.getItem("streamsTeacherRoom")||"";
 let roomData=null;
 let pollTimer=null;
+let creatingRoom=false;
 
-async function newRoom(){
-  room=makeCode();
-  localStorage.setItem("streamsTeacherRoom",room);
-  await fbPut("/streamsRooms/"+room,{
+async function makeRoomData(students={}){
+  return {
     created:Date.now(),
     resetToken:Date.now(),
     currentIndex:-1,
     currentValue:"-",
     deck:makeDeck().slice(0,20),
-    students:{},
+    students,
     ended:false,
-    dataVersion:"3.2-name-based"
-  });
-  await refreshRoom();
+    dataVersion:"3.2.2-name-based"
+  };
+}
+
+async function newRoom(){
+  if(creatingRoom)return;
+  creatingRoom=true;
+  try{
+    room=makeCode();
+    localStorage.setItem("streamsTeacherRoom",room);
+    await fbPut("/streamsRooms/"+room, await makeRoomData({}));
+    await refreshRoom();
+  }finally{
+    creatingRoom=false;
+  }
 }
 
 async function resetRoom(){
@@ -37,16 +48,7 @@ async function resetRoom(){
     };
   });
 
-  await fbPut("/streamsRooms/"+room,{
-    created:Date.now(),
-    resetToken:Date.now(),
-    currentIndex:-1,
-    currentValue:"-",
-    deck:makeDeck().slice(0,20),
-    students,
-    ended:false,
-    dataVersion:"3.2-name-based"
-  });
+  await fbPut("/streamsRooms/"+room, await makeRoomData(students));
   await refreshRoom();
 }
 
@@ -58,7 +60,7 @@ function staticRender(){
   $("topRoom").textContent=room||"-";
   $("roomCode").textContent=room||"-";
   const link=location.origin+location.pathname.replace("teacher.html","student.html")+"?room="+(room||"");
-  $("joinLink").textContent=link;
+  $("joinLink").textContent=room?link:"방을 만들면 학생 입장 링크가 표시됩니다.";
   $("qr").src=room?"https://api.qrserver.com/v1/create-qr-code/?size=230x230&data="+encodeURIComponent(link):"";
   $("displayLink").href="display.html?room="+(room||"");
 }
@@ -81,7 +83,7 @@ function getMissingStudents(){
   if(currentTurn()<0)return [];
   return getStudentKeys()
     .filter(k=>!isDone(k))
-    .map(k=>studentsObj()[k].name||k)
+    .map(k=>studentsObj()[k].name||decodeURIComponent(k))
     .sort((a,b)=>a.localeCompare(b,"ko"));
 }
 
@@ -103,6 +105,10 @@ function renderProgress(){
   }
 }
 
+function scoreOfStudent(s){
+  return scoreBoard(s?.boardSimple||simpleBoard(s?.board||Array(20).fill(null)));
+}
+
 function renderStudents(){
   const students=studentsObj();
   const keys=Object.keys(students).sort((a,b)=>(students[a].name||a).localeCompare(students[b].name||b,"ko"));
@@ -110,10 +116,10 @@ function renderStudents(){
   $("studentList").innerHTML=keys.length?keys.map(k=>{
     const s=students[k]||{};
     const done=isDone(k);
-    const sc=scoreBoard(s.boardSimple||[]);
-    const online=(Date.now()-(s.lastSeen||0)<8000);
+    const sc=scoreOfStudent(s);
+    const online=(Date.now()-(s.lastSeen||0)<9000);
     return `<div class="student-card ${done?'done':'pending'}" data-id="${k}">
-      <div>${done?'🟢':'⚪'} ${s.name||k} ${online?'':'<span class="small">(오프라인)</span>'}</div>
+      <div>${done?'🟢':'⚪'} ${s.name||decodeURIComponent(k)} ${online?'':'<span class="small">(오프라인)</span>'}</div>
       <div class="small">${done?'입력 완료':'미입력'} · ${sc.run}칸 / ${sc.score}점</div>
     </div>`;
   }).join(""):"아직 학생 없음";
@@ -127,8 +133,8 @@ function renderRank(){
 
   const ranks=keys.map(k=>{
     const s=students[k]||{};
-    const sc=scoreBoard(s.boardSimple||[]);
-    return {id:k,name:s.name||k,score:sc.score,run:sc.run};
+    const sc=scoreOfStudent(s);
+    return {id:k,name:s.name||decodeURIComponent(k),score:sc.score,run:sc.run};
   }).sort((a,b)=>b.score-a.score||b.run-a.run||a.name.localeCompare(b.name,"ko"));
 
   $("rankList").innerHTML=ranks.length?ranks.map((r,i)=>`<div class="rank-row">
@@ -150,20 +156,28 @@ function openStudent(key){
   const s=studentsObj()[key];
   if(!s)return;
   $("modal").classList.remove("hidden");
-  $("modalTitle").textContent=(s.name||key)+" 학생 판";
+  $("modalTitle").textContent=(s.name||decodeURIComponent(key))+" 학생 판";
   renderBoard($("modalBoard"),{
-    board:s.boardSimple||Array(20).fill(null),
-    name:s.name||"",
+    board:s.boardSimple||simpleBoard(s.board||Array(20).fill(null)),
+    name:s.name||decodeURIComponent(key),
     room,
     currentValue:roomData.currentValue||"-"
   });
 }
 
 async function refreshRoom(){
-  if(!room)return;
+  if(!room){
+    staticRender();
+    return;
+  }
   const data=await fbGet("/streamsRooms/"+room);
   if(!data){
-    await newRoom();
+    // 이전 localStorage 방이 사라진 경우에만 화면에 안내. 자동으로 방을 계속 만들지 않음.
+    roomData=null;
+    staticRender();
+    $("topCurrent").textContent="-";
+    $("studentList").innerHTML="방을 찾을 수 없습니다. 방코드 옆 새 방을 눌러주세요.";
+    $("rankList").innerHTML="방을 찾을 수 없습니다.";
     return;
   }
   roomData=data;
@@ -172,7 +186,6 @@ async function refreshRoom(){
 
 function start(){
   staticRender();
-  if(!room)return newRoom();
   refreshRoom();
   clearInterval(pollTimer);
   pollTimer=setInterval(refreshRoom,500);
@@ -201,6 +214,7 @@ $("drawBtn").onclick=async()=>{
 };
 
 $("endBtn").onclick=async()=>{
+  if(!room)return;
   await fbPatch("/streamsRooms/"+room,{ended:true});
   await refreshRoom();
 };
