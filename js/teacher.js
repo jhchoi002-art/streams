@@ -2,8 +2,7 @@ let room=localStorage.getItem("streamsTeacherRoom")||"";
 let roomData=null;
 let unsubscribe=null;
 let lastRankSignature="";
-let lastStudentSignature="";
-let lastProgressSignature="";
+let lastDoneMap={};
 
 async function newRoom(){
   room=makeCode();
@@ -44,6 +43,7 @@ async function resetRoom(){
     students,
     ended:false
   });
+  lastDoneMap={};
 }
 
 function pickedCount(){
@@ -83,10 +83,6 @@ function getMissingStudents(){
 function renderProgress(){
   const keys=getStudentKeys();
   const done=getDoneKeys();
-  const sig=`${roomData?.currentIndex}|${done.length}|${keys.length}|${pickedCount()}`;
-  if(sig===lastProgressSignature)return;
-  lastProgressSignature=sig;
-
   $("turnCount").textContent=`${done.length} / ${keys.length}명`;
   $("turnFill").style.width=keys.length?`${Math.round(done.length/keys.length*100)}%`:"0%";
   $("turnMsg").style.display=(keys.length>0&&done.length===keys.length&&(roomData?.currentIndex??-1)>=0)?"block":"none";
@@ -105,22 +101,23 @@ function renderStudents(){
   const students=roomData?.students||{};
   const current=roomData?.currentIndex??-1;
   const keys=Object.keys(students).sort((a,b)=>(students[a].name||a).localeCompare(students[b].name||b,"ko"));
-  const sig=keys.map(k=>{
-    const s=students[k], sc=scoreBoard(s.boardSimple||[]);
-    return `${k}:${s.name}:${s.currentPlaced===current}:${sc.run}:${sc.score}:${s.updated||0}`;
-  }).join("|");
-  if(sig===lastStudentSignature)return;
-  lastStudentSignature=sig;
 
   $("studentList").innerHTML=keys.length?keys.map(k=>{
     const s=students[k];
     const done=current>=0&&s.currentPlaced===current;
+    const wasDone=lastDoneMap[k]===true;
+    const flash=done&&!wasDone?' flash':'';
     const sc=scoreBoard(s.boardSimple||[]);
-    return `<div class="student-card ${done?'done':''}" data-id="${k}">
+    return `<div class="student-card ${done?'done':'pending'}${flash}" data-id="${k}">
       <div>${done?'🟢':'⚪'} ${s.name||k}</div>
       <div class="small">${done?'입력 완료':'미입력'} · ${sc.run}칸 / ${sc.score}점</div>
     </div>`;
   }).join(""):"아직 학생 없음";
+
+  const nextMap={};
+  keys.forEach(k=>{nextMap[k]=current>=0&&students[k].currentPlaced===current;});
+  lastDoneMap=nextMap;
+
   document.querySelectorAll(".student-card").forEach(el=>el.onclick=()=>openStudent(el.dataset.id));
 }
 
@@ -150,8 +147,8 @@ function render(){
   if(!roomData)return;
   $("topCurrent").textContent=roomData.currentValue||"-";
   renderProgress();
-  renderStudents();
-  renderRank();
+  renderStudents(); // Beta: 학생 목록은 항상 최신으로 다시 그림
+  renderRank();     // 순위는 점수 변화 시에만 다시 그림
 }
 
 function openStudent(id){
@@ -174,7 +171,6 @@ function listenRoom(){
 
 $("newRoomBtn").onclick=()=>{if(confirm("정말 새 방을 만들까요? 현재 방코드가 바뀝니다."))newRoom()};
 $("resetBtn").onclick=resetRoom;
-
 $("drawBtn").onclick=async()=>{
   if(!roomData)return;
   const ni=(roomData.currentIndex??-1)+1;
@@ -189,12 +185,9 @@ $("drawBtn").onclick=async()=>{
     const ok=confirm(`아직 입력하지 않은 학생이 있습니다.\n\n입력 완료: ${done.length} / ${keys.length}명\n\n미입력 학생\n${preview}${more}\n\n정말 다음 숫자를 뽑으시겠습니까?`);
     if(!ok)return;
   }
-
   await fbPatch("/streamsRooms/"+room,{currentIndex:ni,currentValue:roomData.deck[ni]});
 };
-
 $("endBtn").onclick=()=>fbPatch("/streamsRooms/"+room,{ended:true});
 $("closeModal").onclick=()=>$("modal").classList.add("hidden");
 $("modal").onclick=e=>{if(e.target.id==="modal")$("modal").classList.add("hidden")};
-
 listenRoom();

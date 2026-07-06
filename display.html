@@ -3,17 +3,38 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>전자칠판 - STREAMS 3.1 Alpha</title>
+  <title>전자칠판 - STREAMS 3.1 Beta</title>
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/board.css">
 </head>
 <body class="display">
-  <div class="display-code">방코드 <span id="displayRoom">-</span></div>
-  <div class="display-label">현재 숫자</div>
-  <div id="displayNumber" class="display-number">-</div>
-  <div id="displayStudents" class="display-sub">참여 학생 0명</div>
+  <div class="display-layout">
+    <section class="display-card">
+      <div class="display-code">방코드 <span id="displayRoom">-</span></div>
+      <div class="display-label">현재 숫자</div>
+      <div id="displayNumber" class="display-number">-</div>
+      <div id="displayStudents" class="display-sub">참여 학생 0명</div>
+      <div class="display-actions">
+        <button id="top3Btn" class="btn secondary">TOP3 비교</button>
+      </div>
+    </section>
+    <section class="display-card">
+      <div class="display-rank-title">현재 순위</div>
+      <div id="displayRank"></div>
+    </section>
+  </div>
+
+  <div id="displayModal" class="display-modal">
+    <div class="display-modal-box">
+      <button id="displayModalClose" class="display-modal-close">×</button>
+      <h2 id="displayModalTitle">학생 보드</h2>
+      <div id="displayModalContent"></div>
+    </div>
+  </div>
 
   <script src="js/firebase.js"></script>
   <script src="js/common.js"></script>
+  <script src="js/board.js"></script>
   <script src="js/display.js"></script>
 </body>
 </html>
