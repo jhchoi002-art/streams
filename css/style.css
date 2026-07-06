@@ -118,3 +118,17 @@ a{text-decoration:none;color:inherit}
   box-shadow:0 8px 22px rgba(0,0,0,.2);
   z-index:9999;
 }
+
+
+/* STREAMS 4.0 RC4 modal board fix */
+/* 교사용 학생 보드 팝업에서 '다음 숫자를 기다리는 중입니다.' 상태바가 보드를 가리지 않도록 숨김 */
+#modalBoard .footer,
+#modalBoard .bottom-bar,
+#modalBoard .status-bar {
+  display: none !important;
+}
+
+/* 팝업 안 보드가 조금 더 안정적으로 보이도록 여백 확보 */
+#modalBoard {
+  padding-bottom: 24px;
+}
