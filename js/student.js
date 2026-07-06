@@ -9,10 +9,11 @@ let pollTimer=null;
 let heartbeatTimer=null;
 let joined=false;
 
-// clientId: 같은 브라우저/기기인지 구분하기 위한 값
+// 같은 기기 판별용. 한 브라우저에는 계속 같은 clientId가 유지됩니다.
 let clientId=localStorage.getItem("streamsClientId")||("c_"+Math.random().toString(36).slice(2)+Date.now().toString(36));
 localStorage.setItem("streamsClientId",clientId);
 
+// QR로 들어온 경우 방코드만 채우고, 이름은 자동 입력/자동 입장하지 않음
 $("roomInput").value=room;
 $("nameInput").value="";
 $("joinBtn").onclick=join;
@@ -41,11 +42,13 @@ async function join(){
   roomData=data;
   resetToken=String(data.resetToken||"");
 
+  // 같은 이름 기록이 있으면 기존 기록으로 이어서 진행
   const existing=await fbGet(studentPath());
 
-  // 3.3.2 핵심:
-  // 같은 이름 기록이 있고, online=true이며, clientId가 다르면 다른 기기 접속 중으로 판단해 차단.
-  // 같은 기기(clientId 동일)는 새로고침/재입장이므로 허용.
+  // 핵심 수정:
+  // 1) 같은 기기(clientId 동일)면 무조건 이어서 진행
+  // 2) 기존 기록에 clientId가 없으면 기존 버전 기록으로 보고 이어서 진행
+  // 3) 다른 기기 clientId이고 online=true일 때만 입장 차단
   if(existing && existing.online===true && existing.clientId && existing.clientId!==clientId){
     $("joinMsg").textContent="이미 같은 이름으로 다른 기기에서 접속 중입니다. 다른 이름을 입력해주세요.";
     return;
@@ -73,12 +76,13 @@ async function join(){
     });
   }
 
+  // 이름은 저장하되, 다음 QR 입장 때 자동입장은 하지 않음
   localStorage.setItem("streamsName",name);
   localStorage.setItem("streamsRoom",room);
 
   joined=true;
 
-  // 입장 시 기존 board/currentPlaced는 덮어쓰지 않고 접속 상태만 갱신
+  // 입장 시에는 기존 board/currentPlaced를 절대 덮어쓰지 않고 접속 상태만 갱신
   await fbPatch(studentPath(),{
     name,
     online:true,
@@ -208,17 +212,6 @@ async function saveStudent(){
     online:true,
     clientId
   });
-}
-
-async function markOffline(){
-  if(room&&key){
-    try{
-      await fbPatch(studentPath(),{
-        online:false,
-        clientId
-      });
-    }catch(e){}
-  }
 }
 
 window.addEventListener("beforeunload",()=>{
