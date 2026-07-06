@@ -1,113 +1,19 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>STREAMS ONLINE</title><style>
-:root{--navy:#06285c;--bg:#e9eef4;--ink:#001b45;--green:#18ad6b;--red:#d93434}
-*{box-sizing:border-box}
-html,body{margin:0;padding:0;font-family:Arial,'Noto Sans KR',sans-serif;background:var(--bg);color:var(--ink)}
-a{text-decoration:none;color:inherit}
-.topbar{height:54px;background:linear-gradient(#08336f,#06285c);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 18px;font-size:26px;font-weight:900}
-.topbar .center{position:absolute;left:50%;transform:translateX(-50%)}.yellow{color:#ffdf1e}
-.btn{display:inline-block;border:0;border-radius:10px;padding:14px 20px;background:#0b3474;color:#fff;font-size:20px;font-weight:900;cursor:pointer}
-.btn.green{background:var(--green)}.btn.red{background:var(--red)}.btn.gray{background:#e8eef8;color:#08295c}
-.start{min-height:100vh;display:flex;align-items:center;justify-content:center}.start .box{width:650px;background:white;border-radius:16px;box-shadow:0 16px 35px rgba(0,0,0,.12);padding:34px}.start h1{font-size:36px;color:var(--navy);margin:0 0 18px}.start p{font-size:18px}.start .row{display:flex;gap:14px;margin-top:20px}
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>전자칠판 - STREAMS 3.0 Alpha</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="display">
+  <div class="display-code">방코드 <span id="displayRoom">-</span></div>
+  <div class="display-label">현재 숫자</div>
+  <div id="displayNumber" class="display-number">-</div>
+  <div id="displayStudents" class="display-sub">참여 학생 0명</div>
 
-/* Student screen final fixed coordinates */
-.student-page{min-height:100vh}
-.board-stage{display:flex;justify-content:center;align-items:flex-start;padding:24px 8px 100px}
-.board{position:relative;width:1180px;height:620px;background:#fff;border:2px solid #111;transform-origin:top center;overflow:hidden}
-.scorebox{position:absolute;left:44px;top:118px;width:420px;height:440px;border:1px solid #111;background:#fff;z-index:2}
-.scorebox .title{height:58px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid #111;font-size:30px;font-weight:900;color:var(--navy)}
-.score-columns{display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:0 20px}
-.scorebox table{width:100%;border-collapse:collapse;text-align:center;font-size:18px;font-weight:800}.scorebox th,.scorebox td{border:1px solid #111;height:34px}
-.logo{position:absolute;left:800px;top:36px;width:265px;height:135px;border:1px solid #111;background:#fff;text-align:center}
-.logo .en{height:50px;border-bottom:1px solid #111;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:var(--navy)}
-.logo .kr{height:85px;display:flex;align-items:center;justify-content:center;font-size:50px;font-weight:900;color:var(--navy);letter-spacing:2px}
-.info{position:absolute;left:735px;top:220px;width:350px;height:112px;border:1px solid #111;background:#fff}
-.info .row{display:grid;grid-template-columns:110px 1fr;height:56px;border-bottom:1px solid #111}.info .row:last-child{border-bottom:0}
-.info .lab{display:flex;align-items:center;justify-content:center;border-right:1px solid #111;font-size:30px;font-weight:900;color:var(--navy)}.info .val{display:flex;align-items:center;padding-left:22px;font-size:28px;font-weight:900}
-.rules{position:absolute;left:660px;top:375px;width:435px;height:155px;border:1px solid #111;background:#fff;display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:78px 77px;text-align:center;font-weight:900;z-index:2}
-.rules div{border-right:1px solid #111;border-bottom:1px solid #111;display:flex;align-items:center;justify-content:center;padding:5px;font-size:18px;line-height:1.25}.rules div:nth-child(3),.rules div:nth-child(6){border-right:0}.rules div:nth-child(n+4){border-bottom:0;font-size:28px;color:var(--navy)}
-.cell{position:absolute;width:96px;height:58px;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:900;color:#111;cursor:pointer;user-select:none;z-index:5}
-.cell .shape{position:absolute;inset:0;z-index:-1;background:white;border:3px solid #071537}
-.cell.h .shape{clip-path:polygon(0 0,75% 0,100% 50%,75% 100%,0 100%)}
-.cell.v{width:86px;height:58px}.cell.v .shape{clip-path:polygon(0 0,100% 0,100% 68%,50% 100%,0 68%)}
-.cell.current .shape{border-color:#0b72df;background:#eef7ff}
-.footer{position:fixed;bottom:0;left:0;right:0;height:86px;background:#fff6db;border-top:1px solid #e7d99d;display:flex;align-items:center;justify-content:space-between;padding:0 28px;font-size:27px;font-weight:900;color:var(--navy);z-index:30}.footer .score{font-size:32px}.footer .done{background:var(--green);color:#fff;border:0;border-radius:10px;padding:18px 34px;font-size:24px;font-weight:900;cursor:pointer}
-.name-screen{min-height:100vh;display:flex;align-items:center;justify-content:center}.name-box{width:520px;background:#fff;border-radius:14px;box-shadow:0 12px 28px rgba(0,0,0,.12);padding:32px}.name-box input{width:100%;font-size:24px;padding:14px;border:2px solid #c9d2e1;border-radius:8px;margin:12px 0}
-
-/* teacher retained */
-.wrap{max-width:1320px;margin:24px auto;padding:0 18px}.card{background:#fff;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.10);padding:24px;margin:16px 0}.teacher-grid{display:grid;grid-template-columns:1.8fr 1fr;gap:20px}.big-code{font-size:62px;font-weight:900;color:var(--navy);letter-spacing:2px}.qr{width:230px;height:230px;border:1px solid #ddd;margin:14px 0}
-.student-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}.student-item{border:2px solid #c9d7ea;border-radius:10px;padding:10px;cursor:pointer;background:#f8fbff;font-weight:900}.student-item.done{border-color:var(--green);background:#effff6}.student-item .small{font-size:13px;color:#345}.rank-row{display:flex;justify-content:space-between;border-bottom:1px solid #e4e9f1;padding:8px 0;font-weight:900}
-.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:1000}.modal-bg.show{display:flex}.modal{background:white;border-radius:16px;width:min(1120px,95vw);max-height:94vh;overflow:auto;padding:20px;position:relative}.close-red{position:absolute;right:14px;top:12px;width:54px;height:54px;border-radius:50%;border:0;background:#e03333;color:#fff;font-size:30px;font-weight:900;cursor:pointer;z-index:5}.modal-title{text-align:center;font-size:28px;font-weight:900;margin-bottom:8px;color:var(--navy)}.nav-stu{display:flex;justify-content:center;gap:10px;margin:8px 0}.preview-scale{transform:scale(.66);transform-origin:top center;height:500px}.preview-scale .topbar,.preview-scale .footer{display:none}.preview-scale .board-stage{padding:0;background:white}.preview-scale .board{margin:0 auto}
-.display-body{background:#0b1730;color:white;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}.display-num{font-size:180px;font-weight:900;color:#ffd91a}.display-code{font-size:60px;font-weight:900}.display-sub{font-size:30px;margin-top:20px}
-
-/* ===== STREAMS ONLINE 3.0 EFFECTS ===== */
-@keyframes numberPulse{0%{transform:scale(1)}45%{transform:scale(1.28)}100%{transform:scale(1)}}
-@keyframes cellPop{0%{transform:scale(.86)}65%{transform:scale(1.14)}100%{transform:scale(1)}}
-@keyframes softBlink{0%,100%{filter:brightness(1)}50%{filter:brightness(1.25)}}
-@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
-@keyframes glowBlue{0%,100%{box-shadow:0 0 0 rgba(11,114,223,0)}50%{box-shadow:0 0 18px rgba(11,114,223,.5)}}
-@keyframes fadeSlide{0%{opacity:0;transform:translateY(10px)}100%{opacity:1;transform:translateY(0)}}
-.topbar .yellow{display:inline-block;animation:numberPulse .45s ease}
-.cell.current .shape{animation:softBlink 1.1s infinite, glowBlue 1.1s infinite}
-.cell.filled .shape{background:#eef2f7!important;border-color:#334155!important}
-.cell.just-placed{animation:cellPop .22s ease}
-.cell.shake{animation:shake .32s ease}
-.student-item.done::after{content:" ✓";color:#18ad6b;font-weight:900}
-.rank-row{animation:fadeSlide .25s ease}
-.display-num{animation:numberPulse .5s ease}
-.modal{animation:fadeSlide .18s ease}
-.toast{
-  position:fixed;left:50%;bottom:110px;transform:translateX(-50%);
-  background:#06285c;color:white;padding:14px 22px;border-radius:999px;
-  font-size:20px;font-weight:900;box-shadow:0 8px 22px rgba(0,0,0,.2);z-index:9999;
-  animation:fadeSlide .2s ease;
-}
-.final-badge{
-  position:fixed;inset:0;background:rgba(6,40,92,.88);z-index:2000;color:white;
-  display:flex;align-items:center;justify-content:center;text-align:center;
-}
-.final-badge .box{background:white;color:#06285c;border-radius:20px;padding:36px 52px;box-shadow:0 18px 45px rgba(0,0,0,.35)}
-.final-badge .big{font-size:58px;font-weight:900;margin:12px 0}
-.final-badge .sub{font-size:28px;font-weight:900}
-.final-badge button{margin-top:22px}
-
-
-.turn-progress-wrap{margin-top:14px}
-.turn-progress-title{font-size:26px;font-weight:900;color:#06285c;margin-bottom:8px}
-.turn-progress-bar{height:24px;background:#e8eef8;border-radius:999px;overflow:hidden;border:1px solid #c9d7ea}
-.turn-progress-fill{height:100%;width:0%;background:#18ad6b;transition:width .25s ease}
-.turn-complete-msg{margin-top:10px;font-size:22px;font-weight:900;color:#18ad6b;display:none}
-.student-item.pending{opacity:.72;background:#f7f8fb;border-color:#d9e1ee}
-.student-item.done{border-color:#18ad6b!important;background:#effff6!important}
-.footer .done{display:none!important}
-
-</style></head><body class='display-body'><div class="display-code">방코드 <span id="code">-</span></div><div class="display-num" id="num">-</div><div class="display-sub" id="sub">다음 숫자를 기다리는 중입니다.</div><script>
-const DB="https://minority-stock-game-default-rtdb.asia-southeast1.firebasedatabase.app";
-const $=(id)=>document.getElementById(id);
-const qs=new URLSearchParams(location.search);
-const roomParam=qs.get('room')||'';
-async function get(p){const r=await fetch(DB+p+".json?t="+Date.now());return await r.json();}
-async function put(p,d){return fetch(DB+p+".json",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(d)});}
-async function patch(p,d){return fetch(DB+p+".json",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(d)});}
-function makeCode(){const c="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";let s="";for(let i=0;i<6;i++)s+=c[Math.floor(Math.random()*c.length)];return s;}
-function makeDeck(){const d=[];for(let i=1;i<=10;i++)d.push(String(i));for(let i=11;i<=19;i++){d.push(String(i));d.push(String(i));}for(let i=20;i<=30;i++)d.push(String(i));d.push("★");for(let i=d.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[d[i],d[j]]=[d[j],d[i]];}return d;}
-const SCORE_MAP={1:0,2:1,3:3,4:5,5:7,6:9,7:11,8:15,9:20,10:25,11:30,12:35,13:40,14:50,15:60,16:70,17:85,18:100,19:150,20:300};
-function scoreBoard(board){const arr=(board||Array(20).fill(null)).map(v=>v||null);let best=0;function ok(seq){let lo=-Infinity;for(const v of seq){if(v==="★")continue;const n=Number(v);if(n<lo)return false;lo=n;}return true;}for(let i=0;i<20;i++){for(let j=i;j<20;j++){const seq=arr.slice(i,j+1);if(seq.some(x=>x===null))break;if(ok(seq))best=Math.max(best,seq.length);}}return{run:best,score:SCORE_MAP[best]??0};}
-function renderScoreTable(){return `<div class="scorebox"><div class="title">점수표</div><div class="score-columns"><table><tr><th>오름차순</th><th>점수</th></tr>${[1,2,3,4,5,6,7,8,9,10].map(n=>`<tr><td>${n}칸</td><td>${SCORE_MAP[n]}</td></tr>`).join('')}</table><table><tr><th>오름차순</th><th>점수</th></tr>${[11,12,13,14,15,16,17,18,19,20].map(n=>`<tr><td>${n}칸</td><td>+${SCORE_MAP[n]}</td></tr>`).join('')}</table></div></div>`;}
-function cellStyle(i){
-  // 최종 고정 좌표: 위 5칸은 왼쪽, 세로줄은 위로 당김, 아래칸은 찌그러지지 않음
-  const topX=65, topY=44, topGap=110;
-  const vX=515, vY=105, vGap=46;
-  const bottomX=610, bottomY=520, bottomGap=102;
-  if(i<5)return{cls:"h",x:topX+i*topGap,y:topY};
-  if(i<15)return{cls:"v",x:vX,y:vY+(i-5)*vGap};
-  return{cls:"h",x:bottomX+(i-15)*bottomGap,y:bottomY};
-}
-function renderBoard(container,opt={}){
-  const board=opt.board||Array(20).fill(null),name=opt.name||"",room=opt.roomCode||"",cur=opt.currentValue||"-",sc=scoreBoard(board),cd=opt.currentDraw;
-  container.innerHTML=`<div class="student-page"><div class="topbar"><div>방코드 : ${room}</div><div class="center">현재 숫자 : <span class="yellow">${cur}</span></div><div>${name}</div></div><div class="board-stage"><div class="board">${renderScoreTable()}<div class="logo"><div class="en">STREAMS</div><div class="kr">스트림스</div></div><div class="info"><div class="row"><div class="lab">이름</div><div class="val">${name}</div></div><div class="row"><div class="lab">점수</div><div class="val">${sc.score}점</div></div></div><div class="rules"><div>1. 다음 숫자 뽑기<br>전에 꼭 쓰기</div><div>2. 이웃한 같은<br>숫자는 오름차순 OK</div><div>3. 다음 숫자가<br>나오면 수정 불가</div><div>1~10</div><div>11~19<br>11~19</div><div>20~30 ★</div></div>${Array.from({length:20}).map((_,i)=>{const s=cellStyle(i),v=board[i]??'',cc=cd&&cd.cell===i?' current':'';return `<div class="cell ${s.cls}${cc}" data-idx="${i}" style="left:${s.x}px;top:${s.y}px"><div class="shape"></div>${v}</div>`}).join('')}</div></div><div class="footer"><div>${opt.status||'다음 숫자를 기다리는 중입니다.'}</div><div class="score">오름차순 ${sc.run}칸 / ${sc.score}점</div><button class="done" id="doneBtn">입력 완료</button></div></div>`;
-  function fit(){const b=container.querySelector('.board');if(!b)return;const scale=Math.min(1.02,(window.innerWidth-20)/1180,(window.innerHeight-150)/620);b.style.transform=`scale(${scale})`;}fit();window.addEventListener('resize',fit);
-  if(opt.interactive){container.querySelectorAll('.cell').forEach(el=>el.onclick=()=>opt.onCell&&opt.onCell(Number(el.dataset.idx)));const b=container.querySelector('#doneBtn');if(b)b.onclick=()=>opt.onDone&&opt.onDone();}else{const b=container.querySelector('#doneBtn');if(b)b.style.display='none';}
-}
-</script><script>
-let room=roomParam;async function load(){const s=await get('/streamsRooms/'+room);if(!s)return;code.textContent=room;if(num.textContent!==(s.currentValue||'-')){num.textContent=s.currentValue||'-';num.style.animation='none';void num.offsetWidth;num.style.animation='numberPulse .5s ease';}sub.textContent=`참여 학생 ${Object.keys(s.students||{}).length}명`;}load();setInterval(load,1000);
-</script></body></html>
+  <script src="js/firebase.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/display.js"></script>
+</body>
+</html>

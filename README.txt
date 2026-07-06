@@ -1,9 +1,22 @@
-STREAMS ONLINE 3.0
+STREAMS ONLINE 3.0 Release Alpha
 
-핵심 변경:
-- 시작 화면 버전명을 STREAMS ONLINE 3.0으로 수정
-- 교사용 상태관리 재정리
-- 학생 입력현황과 진행률을 0.35초 단위로 안정 갱신
-- 순위는 점수 변동이 있을 때만 다시 그려 깜빡임 완화
-- 초기화 버튼은 방코드 유지 + 학생 화면의 숫자까지 자동 삭제
-- 새 방 버튼은 방코드 옆에 유지, 확인창 표시
+새 구조:
+- css/style.css
+- css/board.css
+- js/firebase.js
+- js/common.js
+- js/board.js
+- js/teacher.js
+- js/student.js
+- js/display.js
+
+Alpha 포함 기능:
+- 교사용 방 생성, 방코드, QR
+- 학생 입장
+- 숫자 뽑기
+- 학생 숫자 입력
+- 같은 턴 내 이동 가능
+- 이전 턴 숫자칸 입력 불가
+- 교사용 입력 현황 실시간 반영
+- 순위 표시
+- 초기화 시 방코드 유지 및 학생 화면 초기화
