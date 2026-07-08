@@ -154,3 +154,63 @@ a{text-decoration:none;color:inherit}
 .cell.failed{
   color:#9b1c1c !important;
 }
+
+
+/* STREAMS 4.1.4 break lines */
+/* 오름차순 성공 칸은 차분한 초록/파란 느낌으로 표시 */
+.cell.scored .shape{
+  background:#eef8ff !important;
+  border-color:#1877d2 !important;
+  box-shadow:0 0 0 4px rgba(24,119,210,.14), 0 0 14px rgba(24,119,210,.22);
+}
+.cell.scored{
+  color:#06285c !important;
+}
+
+/* 실패 칸은 연한 빨강으로만 표시 */
+.cell.failed .shape{
+  background:#fff5f5 !important;
+  border-color:#d93030 !important;
+  box-shadow:0 0 0 3px rgba(217,48,48,.10);
+}
+.cell.failed{
+  color:#9b1c1c !important;
+}
+
+/* 오름차순이 끊어진 연결 지점 표시 */
+.game-board{
+  position:relative;
+}
+.break-mark{
+  position:absolute;
+  z-index:80;
+  pointer-events:none;
+  background:#e03131;
+  border-radius:999px;
+  box-shadow:0 0 0 4px rgba(224,49,49,.16), 0 0 12px rgba(224,49,49,.38);
+}
+.break-mark.vertical{
+  width:8px;
+  height:48px;
+}
+.break-mark.horizontal{
+  width:48px;
+  height:8px;
+}
+.break-mark::after{
+  content:"×";
+  position:absolute;
+  left:50%;
+  top:50%;
+  transform:translate(-50%,-50%);
+  width:26px;
+  height:26px;
+  border-radius:50%;
+  background:#e03131;
+  color:white;
+  font-size:20px;
+  line-height:24px;
+  text-align:center;
+  font-weight:900;
+  font-family:Arial, sans-serif;
+}

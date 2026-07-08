@@ -135,6 +135,7 @@ function streamsApplyHighlight(container, rawBoard){
       if(result.scored[i]) cell.classList.add("scored");
       else if(result.failed[i]) cell.classList.add("failed");
     });
+    streamsApplyBreakLines(container, rawBoard);
   }catch(e){
     console.warn("highlight skipped", e);
   }
@@ -148,4 +149,90 @@ if(typeof renderBoard === "function" && !window.__streamsHighlightWrapped){
     __streamsOriginalRenderBoard(container, opt);
     streamsApplyHighlight(container, opt.board || Array(20).fill(null));
   };
+}
+
+
+// STREAMS 4.1.4: 오름차순이 끊긴 지점에 빨간 표시선을 추가
+function streamsFindBreaksForHighlight(rawBoard){
+  const arr = streamsSimpleValuesForHighlight(rawBoard);
+  const breaks = [];
+
+  let prevIndex = -1;
+  let last = -Infinity;
+
+  for(let i=0;i<arr.length;i++){
+    const v = arr[i];
+
+    if(v === null || v === undefined || v === ""){
+      prevIndex = -1;
+      last = -Infinity;
+      continue;
+    }
+
+    if(v === "★"){
+      prevIndex = i;
+      continue;
+    }
+
+    const n = Number(v);
+    if(Number.isNaN(n)){
+      prevIndex = -1;
+      last = -Infinity;
+      continue;
+    }
+
+    if(prevIndex >= 0 && n < last){
+      breaks.push({from: prevIndex, to: i});
+    }
+
+    prevIndex = i;
+    last = n;
+  }
+
+  return breaks;
+}
+
+function streamsApplyBreakLines(container, rawBoard){
+  try{
+    if(!container) return;
+
+    container.querySelectorAll(".break-mark").forEach(el=>el.remove());
+
+    const cells = Array.from(container.querySelectorAll(".cell"));
+    const boardRoot = container.querySelector(".game-board") || container;
+    const breaks = streamsFindBreaksForHighlight(rawBoard);
+
+    breaks.forEach(b=>{
+      const from = cells[b.from];
+      const to = cells[b.to];
+      if(!from || !to) return;
+
+      const fromRect = from.getBoundingClientRect();
+      const toRect = to.getBoundingClientRect();
+      const rootRect = boardRoot.getBoundingClientRect();
+
+      const x1 = fromRect.left + fromRect.width/2 - rootRect.left;
+      const y1 = fromRect.top + fromRect.height/2 - rootRect.top;
+      const x2 = toRect.left + toRect.width/2 - rootRect.left;
+      const y2 = toRect.top + toRect.height/2 - rootRect.top;
+
+      const mark = document.createElement("div");
+      mark.className = "break-mark";
+
+      // 가로로 이어진 칸이면 세로선, 세로로 이어진 칸이면 가로선 느낌으로 표시
+      if(Math.abs(x2-x1) >= Math.abs(y2-y1)){
+        mark.classList.add("vertical");
+        mark.style.left = ((x1+x2)/2 - 4) + "px";
+        mark.style.top = ((y1+y2)/2 - 24) + "px";
+      }else{
+        mark.classList.add("horizontal");
+        mark.style.left = ((x1+x2)/2 - 24) + "px";
+        mark.style.top = ((y1+y2)/2 - 4) + "px";
+      }
+
+      boardRoot.appendChild(mark);
+    });
+  }catch(e){
+    console.warn("break line skipped", e);
+  }
 }
