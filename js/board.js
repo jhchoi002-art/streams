@@ -20,7 +20,7 @@ function renderBoard(container, opt={}){
  <div class="logo"><div class="en">STREAMS</div><div class="kr">스트림스</div></div>
  <div class="info"><div class="row"><div class="lab">이름</div><div class="val">${name}</div></div><div class="row"><div class="lab">점수</div><div class="val">${sc.score}점</div></div></div>
  <div class="rules"><div>1. 다음 숫자 뽑기<br>전에 꼭 쓰기</div><div>2. 이웃한 같은<br>숫자는 오름차순 OK</div><div>3. 다음 숫자가<br>나오면 수정 불가</div><div>1~10</div><div>11~19<br>11~19</div><div>20~30 ★</div></div>
- ${Array.from({length:20}).map((_,i)=>{const s=cellStyle(i), val=board[i]||""; return `<div class="cell ${s.cls} ${val?'filled':''} ${scoreHighlight.scored[i]?'scored':''} ${scoreHighlight.failed[i]?'failed':''} ${currentCell===i?'current':''}" data-idx="${i}" style="left:${s.x}px;top:${s.y}px"><div class="shape"></div>${val}</div>`}).join("")}
+ ${Array.from({length:20}).map((_,i)=>{const s=cellStyle(i), val=board[i]||""; return `<div class="cell ${s.cls} ${val?'filled':''} ${currentCell===i?'current':''}" data-idx="${i}" style="left:${s.x}px;top:${s.y}px"><div class="shape"></div>${val}</div>`}).join("")}
  </div></div><footer class="footer"><div>${opt.status||"다음 숫자를 기다리는 중입니다."}</div><div class="score">오름차순 ${sc.run}칸 / ${sc.score}점</div></footer></div>`;
  const b=container.querySelector(".game-board");
  function fit(){ if(!b)return; const scale=Math.min(1.02,(window.innerWidth-20)/1180,(window.innerHeight-150)/620); b.style.transform=`scale(${scale})`; }
@@ -34,11 +34,10 @@ function renderBoardOnly(container, opt={}){
  const room=opt.room||"";
  const current=opt.currentValue||"-";
  const sc=scoreBoard(board);
- const scoreHighlight=streamsAnalyzeScoreRuns(board);
  container.innerHTML=`<div class="board-only-wrap"><div class="board-only-scale"><div class="game-board">${renderScoreTable()}
  <div class="logo"><div class="en">STREAMS</div><div class="kr">스트림스</div></div>
  <div class="info"><div class="row"><div class="lab">이름</div><div class="val">${name}</div></div><div class="row"><div class="lab">점수</div><div class="val">${sc.score}점</div></div></div>
  <div class="rules"><div>1. 다음 숫자 뽑기<br>전에 꼭 쓰기</div><div>2. 이웃한 같은<br>숫자는 오름차순 OK</div><div>3. 다음 숫자가<br>나오면 수정 불가</div><div>1~10</div><div>11~19<br>11~19</div><div>20~30 ★</div></div>
- ${Array.from({length:20}).map((_,i)=>{const s=cellStyle(i), val=board[i]||""; return `<div class="cell ${s.cls} ${val?'filled':''} ${scoreHighlight.scored[i]?'scored':''} ${scoreHighlight.failed[i]?'failed':''}" style="left:${s.x}px;top:${s.y}px"><div class="shape"></div>${val}</div>`}).join("")}
+ ${Array.from({length:20}).map((_,i)=>{const s=cellStyle(i), val=board[i]||""; return `<div class="cell ${s.cls} ${val?'filled':''}" style="left:${s.x}px;top:${s.y}px"><div class="shape"></div>${val}</div>`}).join("")}
  </div></div></div>`;
 }
