@@ -41,3 +41,111 @@ function renderBoardOnly(container, opt={}){
  ${Array.from({length:20}).map((_,i)=>{const s=cellStyle(i), val=board[i]||""; return `<div class="cell ${s.cls} ${val?'filled':''}" style="left:${s.x}px;top:${s.y}px"><div class="shape"></div>${val}</div>`}).join("")}
  </div></div></div>`;
 }
+
+
+// STREAMS 4.1.3 SAFE SCORE HIGHLIGHT
+// 기존 보드 렌더링은 그대로 두고, 렌더링 후 DOM에만 색상 클래스를 추가합니다.
+function streamsSimpleValuesForHighlight(rawBoard){
+  const arr = Array(20).fill(null);
+  const src = Array.isArray(rawBoard) ? rawBoard : [];
+  for(let i=0;i<20;i++){
+    const v = src[i];
+    if(v && typeof v === "object" && "value" in v) arr[i] = v.value;
+    else if(v !== undefined) arr[i] = v;
+  }
+  return arr;
+}
+
+function streamsAnalyzeHighlight(rawBoard){
+  const arr = streamsSimpleValuesForHighlight(rawBoard);
+  const scored = Array(20).fill(false);
+  const failed = Array(20).fill(false);
+
+  function mark(start, end){
+    if(start < 0 || end < start) return;
+    const len = end - start + 1;
+    const score = (typeof SCORE_MAP !== "undefined" ? SCORE_MAP[len] : 0) || 0;
+    for(let i=start;i<=end;i++){
+      if(arr[i] !== null && arr[i] !== undefined && arr[i] !== ""){
+        if(score > 0) scored[i] = true;
+        else failed[i] = true;
+      }
+    }
+  }
+
+  let start = -1;
+  let last = -Infinity;
+
+  for(let i=0;i<arr.length;i++){
+    const v = arr[i];
+
+    if(v === null || v === undefined || v === ""){
+      mark(start, i-1);
+      start = -1;
+      last = -Infinity;
+      continue;
+    }
+
+    if(start < 0){
+      start = i;
+      if(v !== "★"){
+        const n = Number(v);
+        last = Number.isNaN(n) ? -Infinity : n;
+      }
+      continue;
+    }
+
+    if(v === "★") continue;
+
+    const n = Number(v);
+    if(Number.isNaN(n)){
+      mark(start, i-1);
+      start = -1;
+      last = -Infinity;
+      continue;
+    }
+
+    if(n < last){
+      mark(start, i-1);
+      start = i;
+      last = n;
+    }else{
+      last = n;
+    }
+  }
+
+  mark(start, arr.length-1);
+
+  for(let i=0;i<20;i++){
+    if(arr[i] !== null && arr[i] !== undefined && arr[i] !== "" && !scored[i]){
+      failed[i] = true;
+    }
+  }
+
+  return {scored, failed};
+}
+
+function streamsApplyHighlight(container, rawBoard){
+  try{
+    if(!container) return;
+    const result = streamsAnalyzeHighlight(rawBoard);
+    const cells = Array.from(container.querySelectorAll(".cell"));
+    cells.forEach((cell, i)=>{
+      cell.classList.remove("scored","failed");
+      if(result.scored[i]) cell.classList.add("scored");
+      else if(result.failed[i]) cell.classList.add("failed");
+    });
+  }catch(e){
+    console.warn("highlight skipped", e);
+  }
+}
+
+// 기존 renderBoard를 감싸되, 실패해도 기존 화면은 유지되게 합니다.
+if(typeof renderBoard === "function" && !window.__streamsHighlightWrapped){
+  window.__streamsHighlightWrapped = true;
+  const __streamsOriginalRenderBoard = renderBoard;
+  renderBoard = function(container, opt={}){
+    __streamsOriginalRenderBoard(container, opt);
+    streamsApplyHighlight(container, opt.board || Array(20).fill(null));
+  };
+}

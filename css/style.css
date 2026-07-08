@@ -132,3 +132,25 @@ a{text-decoration:none;color:inherit}
 #modalBoard {
   padding-bottom: 24px;
 }
+
+
+/* STREAMS 4.1.3 safe score highlight */
+/* 점수에 포함된 오름차순 칸 */
+.cell.scored .shape{
+  background:#eafff4 !important;
+  border-color:#12a66a !important;
+  box-shadow:0 0 0 4px rgba(18,166,106,.16), 0 0 16px rgba(18,166,106,.28);
+}
+.cell.scored{
+  color:#05603a !important;
+}
+
+/* 숫자는 놓였지만 오름차순 구간에 포함되지 못한 칸 */
+.cell.failed .shape{
+  background:#fff1f1 !important;
+  border-color:#d93030 !important;
+  box-shadow:0 0 0 4px rgba(217,48,48,.13);
+}
+.cell.failed{
+  color:#9b1c1c !important;
+}
