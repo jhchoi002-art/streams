@@ -176,3 +176,80 @@ function scorePayloadFromBoard(board){
   const sc=scoreBoard(b);
   return {boardSimple:b,score:sc.score,run:sc.run,bestRun:sc.bestRun||sc.run};
 }
+
+
+// STREAMS 4.1: 점수 포함/미포함 구간 분석
+function analyzeScoreRuns(board){
+  const arr = simpleBoard(board || Array(20).fill(null));
+  const scored = Array(20).fill(false);
+  const failed = Array(20).fill(false);
+  const groups = [];
+
+  function addRun(start, end){
+    if(start < 0 || end < start) return;
+    const len = end - start + 1;
+    const score = SCORE_MAP[len] ?? 0;
+
+    for(let i=start;i<=end;i++){
+      if(arr[i]!==null && arr[i]!==undefined && arr[i]!==""){
+        if(score > 0) scored[i] = true;
+        else failed[i] = true;
+      }
+    }
+
+    groups.push({start,end,len,score});
+  }
+
+  let start = -1;
+  let last = -Infinity;
+
+  for(let i=0;i<arr.length;i++){
+    const v = arr[i];
+
+    if(v===null || v===undefined || v===""){
+      addRun(start, i-1);
+      start = -1;
+      last = -Infinity;
+      continue;
+    }
+
+    if(start < 0){
+      start = i;
+      if(v !== "★"){
+        const n = Number(v);
+        last = Number.isNaN(n) ? -Infinity : n;
+      }
+      continue;
+    }
+
+    if(v === "★"){
+      continue;
+    }
+
+    const n = Number(v);
+    if(Number.isNaN(n)){
+      addRun(start, i-1);
+      start = -1;
+      last = -Infinity;
+      continue;
+    }
+
+    if(n < last){
+      addRun(start, i-1);
+      start = i;
+      last = n;
+    }else{
+      last = n;
+    }
+  }
+
+  addRun(start, arr.length-1);
+
+  for(let i=0;i<arr.length;i++){
+    if(arr[i]!==null && arr[i]!==undefined && arr[i]!=="" && !scored[i]){
+      failed[i] = true;
+    }
+  }
+
+  return {scored, failed, groups};
+}

@@ -132,3 +132,30 @@ a{text-decoration:none;color:inherit}
 #modalBoard {
   padding-bottom: 24px;
 }
+
+
+/* STREAMS 4.1 score highlight */
+/* 점수에 포함된 오름차순 칸 */
+.cell.scored .shape{
+  background:#eafff4 !important;
+  border-color:#12a66a !important;
+  box-shadow:0 0 0 4px rgba(18,166,106,.16), 0 0 16px rgba(18,166,106,.28);
+}
+.cell.scored{
+  color:#05603a !important;
+}
+
+/* 오름차순이 끊겨 점수에 포함되지 못한 칸 */
+.cell.failed .shape{
+  background:#fff1f1 !important;
+  border-color:#d93030 !important;
+  box-shadow:0 0 0 4px rgba(217,48,48,.13);
+}
+.cell.failed{
+  color:#9b1c1c !important;
+}
+
+/* 현재 턴 선택 칸은 기존 표시가 보이도록 약간 더 강조 */
+.cell.current .shape{
+  box-shadow:0 0 0 5px rgba(37,99,235,.18), 0 0 20px rgba(37,99,235,.28) !important;
+}
