@@ -227,3 +227,20 @@ function streamsApplyBreakLines(container, rawBoard){
     console.warn("break line skipped", e);
   }
 }
+
+(function(){
+ if(window.__streamsLastMarker) return;
+ window.__streamsLastMarker=true;
+ const old=streamsApplyHighlight;
+ streamsApplyHighlight=function(container,rawBoard){
+   old(container,rawBoard);
+   try{
+     container.querySelectorAll('.last-scored').forEach(e=>e.classList.remove('last-scored'));
+     const r=streamsAnalyzeHighlight(rawBoard);
+     const cells=[...container.querySelectorAll('.cell')];
+     let last=-1;
+     r.scored.forEach((v,i)=>{if(v) last=i;});
+     if(last>=0 && cells[last]) cells[last].classList.add('last-scored');
+   }catch(e){}
+ }
+})();
