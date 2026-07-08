@@ -196,10 +196,13 @@ function streamsApplyBreakLines(container, rawBoard){
   try{
     if(!container) return;
 
+    // 이전 표시 제거
     container.querySelectorAll(".break-mark").forEach(el=>el.remove());
+    container.querySelectorAll(".cell.break-before-vertical,.cell.break-before-horizontal").forEach(el=>{
+      el.classList.remove("break-before-vertical","break-before-horizontal");
+    });
 
     const cells = Array.from(container.querySelectorAll(".cell"));
-    const boardRoot = container.querySelector(".game-board") || container;
     const breaks = streamsFindBreaksForHighlight(rawBoard);
 
     breaks.forEach(b=>{
@@ -207,30 +210,18 @@ function streamsApplyBreakLines(container, rawBoard){
       const to = cells[b.to];
       if(!from || !to) return;
 
-      const fromRect = from.getBoundingClientRect();
-      const toRect = to.getBoundingClientRect();
-      const rootRect = boardRoot.getBoundingClientRect();
+      // getBoundingClientRect 대신 offset 좌표를 사용합니다.
+      // 모달/전자칠판에서 보드가 scale 되어도 위치가 틀어지지 않습니다.
+      const dx = (to.offsetLeft || 0) - (from.offsetLeft || 0);
+      const dy = (to.offsetTop || 0) - (from.offsetTop || 0);
 
-      const x1 = fromRect.left + fromRect.width/2 - rootRect.left;
-      const y1 = fromRect.top + fromRect.height/2 - rootRect.top;
-      const x2 = toRect.left + toRect.width/2 - rootRect.left;
-      const y2 = toRect.top + toRect.height/2 - rootRect.top;
-
-      const mark = document.createElement("div");
-      mark.className = "break-mark";
-
-      // 가로로 이어진 칸이면 세로선, 세로로 이어진 칸이면 가로선 느낌으로 표시
-      if(Math.abs(x2-x1) >= Math.abs(y2-y1)){
-        mark.classList.add("vertical");
-        mark.style.left = ((x1+x2)/2 - 4) + "px";
-        mark.style.top = ((y1+y2)/2 - 24) + "px";
+      if(Math.abs(dx) >= Math.abs(dy)){
+        // 좌우로 이어진 칸 사이가 끊긴 경우: 도착 칸 왼쪽/오른쪽에 세로 빨간선
+        to.classList.add("break-before-vertical");
       }else{
-        mark.classList.add("horizontal");
-        mark.style.left = ((x1+x2)/2 - 24) + "px";
-        mark.style.top = ((y1+y2)/2 - 4) + "px";
+        // 위아래로 이어진 칸 사이가 끊긴 경우: 도착 칸 위쪽에 가로 빨간선
+        to.classList.add("break-before-horizontal");
       }
-
-      boardRoot.appendChild(mark);
     });
   }catch(e){
     console.warn("break line skipped", e);

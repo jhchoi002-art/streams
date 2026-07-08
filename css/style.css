@@ -214,3 +214,69 @@ a{text-decoration:none;color:inherit}
   font-weight:900;
   font-family:Arial, sans-serif;
 }
+
+
+/* STREAMS 4.1.5 break line position fix */
+/* 기존 overlay 방식의 break-mark는 위치가 scale에서 어긋날 수 있어 숨김 */
+.break-mark{
+  display:none !important;
+}
+
+/* 끊어진 지점을 도착 칸 기준으로 표시하므로 모달/전자칠판 scale에서도 위치가 안정적입니다. */
+.cell.break-before-vertical::before,
+.cell.break-before-horizontal::before{
+  content:"";
+  position:absolute;
+  z-index:90;
+  pointer-events:none;
+  background:#e03131;
+  border-radius:999px;
+  box-shadow:0 0 0 4px rgba(224,49,49,.16), 0 0 12px rgba(224,49,49,.38);
+}
+
+.cell.break-before-vertical::before{
+  width:8px;
+  height:46px;
+  left:-13px;
+  top:50%;
+  transform:translateY(-50%);
+}
+
+.cell.break-before-horizontal::before{
+  width:46px;
+  height:8px;
+  left:50%;
+  top:-13px;
+  transform:translateX(-50%);
+}
+
+.cell.break-before-vertical::after,
+.cell.break-before-horizontal::after{
+  content:"×";
+  position:absolute;
+  z-index:91;
+  pointer-events:none;
+  width:26px;
+  height:26px;
+  border-radius:50%;
+  background:#e03131;
+  color:#fff;
+  font-size:20px;
+  line-height:24px;
+  text-align:center;
+  font-weight:900;
+  font-family:Arial, sans-serif;
+  box-shadow:0 0 0 4px rgba(224,49,49,.16);
+}
+
+.cell.break-before-vertical::after{
+  left:-22px;
+  top:50%;
+  transform:translateY(-50%);
+}
+
+.cell.break-before-horizontal::after{
+  left:50%;
+  top:-22px;
+  transform:translateX(-50%);
+}

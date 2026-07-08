@@ -1,15 +1,15 @@
-STREAMS ONLINE 4.1.4 Break Lines
+STREAMS ONLINE 4.1.5 Break Line Position Fix
 
 기준:
-- 4.1.3 Score Highlight Safe 기반입니다.
+- 4.1.4 Break Lines 기반입니다.
 
-추가:
-- 점수에 포함된 오름차순 칸: 차분한 파란/초록 계열 표시
-- 점수에 포함되지 못한 칸: 연한 빨간 표시
-- 오름차순이 끊어진 지점: 빨간 선 + X 표시
-- 기존 렌더링과 점수 계산 로직은 건드리지 않고, 화면 표시 후 DOM에 표시만 추가합니다.
+수정:
+- 모달/학생 보드 보기에서 빨간 끊김 표시가 엉뚱한 위치에 나타나는 문제 수정
+- getBoundingClientRect overlay 방식 대신 셀 자체에 break-before 클래스를 붙이는 방식으로 변경
+- 27과 26처럼 실제 끊어진 두 칸 사이에 표시가 안정적으로 나타나도록 수정
 
 기존 기능 유지:
+- 점수 포함/미포함 색상 표시
 - 재입장
 - 실시간 순위
 - TOP3 비교
