@@ -178,26 +178,23 @@ function scorePayloadFromBoard(board){
 }
 
 
-// STREAMS 4.1: 점수 포함/미포함 구간 분석
-function analyzeScoreRuns(board){
+// STREAMS 4.1.1: 점수 포함/미포함 구간 분석
+// 기존 scoreBoard/simpleBoard 함수는 건드리지 않고, 별도 함수로만 사용합니다.
+function streamsAnalyzeScoreRuns(board){
   const arr = simpleBoard(board || Array(20).fill(null));
   const scored = Array(20).fill(false);
   const failed = Array(20).fill(false);
-  const groups = [];
 
-  function addRun(start, end){
+  function markRun(start, end){
     if(start < 0 || end < start) return;
     const len = end - start + 1;
     const score = SCORE_MAP[len] ?? 0;
-
     for(let i=start;i<=end;i++){
-      if(arr[i]!==null && arr[i]!==undefined && arr[i]!==""){
+      if(arr[i]!==null && arr[i]!==undefined && arr[i]!== ""){
         if(score > 0) scored[i] = true;
         else failed[i] = true;
       }
     }
-
-    groups.push({start,end,len,score});
   }
 
   let start = -1;
@@ -207,7 +204,7 @@ function analyzeScoreRuns(board){
     const v = arr[i];
 
     if(v===null || v===undefined || v===""){
-      addRun(start, i-1);
+      markRun(start, i-1);
       start = -1;
       last = -Infinity;
       continue;
@@ -222,20 +219,18 @@ function analyzeScoreRuns(board){
       continue;
     }
 
-    if(v === "★"){
-      continue;
-    }
+    if(v === "★") continue;
 
     const n = Number(v);
     if(Number.isNaN(n)){
-      addRun(start, i-1);
+      markRun(start, i-1);
       start = -1;
       last = -Infinity;
       continue;
     }
 
     if(n < last){
-      addRun(start, i-1);
+      markRun(start, i-1);
       start = i;
       last = n;
     }else{
@@ -243,7 +238,7 @@ function analyzeScoreRuns(board){
     }
   }
 
-  addRun(start, arr.length-1);
+  markRun(start, arr.length-1);
 
   for(let i=0;i<arr.length;i++){
     if(arr[i]!==null && arr[i]!==undefined && arr[i]!=="" && !scored[i]){
@@ -251,5 +246,5 @@ function analyzeScoreRuns(board){
     }
   }
 
-  return {scored, failed, groups};
+  return {scored, failed};
 }
